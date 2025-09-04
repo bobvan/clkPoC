@@ -1,15 +1,21 @@
 # gpsdo_main.py
-import asyncio, serial_asyncio, json, logging, time, re
+import asyncio, json, logging, time, re
+import serial_asyncio as serialAsyncio
 from dataclasses import dataclass
 from enum import Enum
-from pyubx2 import UBXReader
-
-# XXX Next: figure out how to run remote code and debug it
+from pyubx2 import UBXMessage
+from pynmeagps import NMEAReader
 
 # third party imports (install as needed)
-# import serial_asyncio
-# from pyubx2 import UBXReader
 # import aiosqlite
+
+# XXX next up: Move F9T code to seprate class/file
+# XXX next up: Try unplugging F9T and TIC to check error handling
+# XXX next up: Time-bounded consideration of watchdog for F9T and TIC
+# XXX next up: Initialize F9T to output TIM-TP messages and other required state
+# XXX next up: Figure out what @dataclass does
+# XXX next up: Define mapping of chA/B to PPS signals
+# XXX next up: Define IPC messages for TIM-TP message and TIC timestamps with host time
 
 class Mode(Enum):
     idle = 0
@@ -33,12 +39,6 @@ class Registry:
         self.dacCode = 0
         self.lastPpsErrorNs = None
         self.health = {"sat": 0, "f9tOk": False, "ticOk": False}
-
-# XXX clean up imports here
-import asyncio
-import serial_asyncio as serialAsyncio # XXX get consistent here
-from pyubx2 import UBXMessage
-from pynmeagps import NMEAMessage, NMEAReader
 
 async def runF9tStream(port, baud, ubxHandler, nmeaHandler, dropRtcm=True, readSize=4096):
     """
@@ -158,7 +158,7 @@ async def nmeaPrinter(msg, raw):
     pass
 
 async def ticReader(eventBus, port, baud, discard_interval=1.0):
-    reader, writer = await serial_asyncio.open_serial_connection(url=port, baudrate=baud)
+    reader, writer = await serialAsyncio.open_serial_connection(url=port, baudrate=baud)
     start_time = asyncio.get_event_loop().time()  # Get the current time
     discarded_lines = 0
 
@@ -276,15 +276,6 @@ async def main():
     except asyncio.CancelledError:
         pass
 
-# async def main():
-#     await runF9tStream(
-#         port="/dev/ttyACM1",
-#         baud=9600,
-#         ubxHandler=ubxPrinter,
-#         nmeaHandler=nmeaPrinter,
-#         dropRtcm=True,
-#     )
-
 if __name__ == "__main__":
-    print("main runnign")
+    print("main running")
     asyncio.run(main())
