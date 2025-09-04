@@ -17,11 +17,13 @@ from f9t import F9T
 # XXX next up: Define mapping of chA/B to PPS signals
 # XXX next up: Define IPC messages for TIM-TP message and TIC timestamps with host time
 
+
 class Mode(Enum):
     idle = 0
     disciplining = 1
     holdover = 2
     fault = 3
+
 
 @dataclass
 class Event:
@@ -30,8 +32,10 @@ class Event:
     kind: str
     data: dict
 
+
 def nowNs():
     return time.monotonic_ns()
+
 
 class Registry:
     def __init__(self):
@@ -48,7 +52,7 @@ async def ticReader(eventBus, port, baud, discard_interval=1.0):
 
     while True:
         raw = await reader.readline()
-        line = raw.decode('utf-8').rstrip()
+        line = raw.decode("utf-8").rstrip()
 
         # Check if we are still within the discard interval
         if asyncio.get_event_loop().time() - start_time < discard_interval:
@@ -65,6 +69,7 @@ async def ticReader(eventBus, port, baud, discard_interval=1.0):
         # await eventBus.put(Event(nowNs(), "tic", "ppsSample", sample))
         # await asyncio.sleep(1.0)
 
+
 async def dacActor(cmdQueue):
     while True:
         cmd = await cmdQueue.get()
@@ -73,6 +78,7 @@ async def dacActor(cmdQueue):
             # blocking i2c write wrapped in to_thread(...)
             # await asyncio.to_thread(write_dac, code)
         cmdQueue.task_done()
+
 
 async def controlLoop(eventBus, reg, dacQueue):
     kp = 0.1
@@ -92,6 +98,7 @@ async def controlLoop(eventBus, reg, dacQueue):
                 await dacQueue.put({"op": "setCode", "code": newCode})
         eventBus.task_done()
 
+
 async def storageWriter(eventBus):
     # db = await aiosqlite.connect("gpsdo.db")
     # await db.execute("pragma journal_mode=wal;")
@@ -100,8 +107,13 @@ async def storageWriter(eventBus):
         # await db.execute("insert into events values (?, ?, ?, ?, ?)",
         #                  (ev.tsMonoNs, None, ev.source, ev.kind, json.dumps(ev.data)))
         # await db.commit()
-        logging.info(json.dumps({"ts": ev.tsMonoNs, "src": ev.source, "kind": ev.kind, "data": ev.data}))
+        logging.info(
+            json.dumps(
+                {"ts": ev.tsMonoNs, "src": ev.source, "kind": ev.kind, "data": ev.data}
+            )
+        )
         eventBus.task_done()
+
 
 async def ipcServer(reg, dacQueue, path="/tmp/gpsdo.sock"):
     async def handle(reader, writer):
@@ -109,7 +121,12 @@ async def ipcServer(reg, dacQueue, path="/tmp/gpsdo.sock"):
             raw = await reader.readline()
             req = json.loads(raw.decode())
             if req.get("cmd") == "getState":
-                resp = {"mode": reg.mode.name, "dacCode": reg.dacCode, "lastPpsErrorNs": reg.lastPpsErrorNs, "health": reg.health}
+                resp = {
+                    "mode": reg.mode.name,
+                    "dacCode": reg.dacCode,
+                    "lastPpsErrorNs": reg.lastPpsErrorNs,
+                    "health": reg.health,
+                }
                 writer.write((json.dumps(resp) + "\n").encode())
             elif req.get("cmd") == "setDac":
                 await dacQueue.put({"op": "setCode", "code": int(req["code"])})
@@ -120,9 +137,11 @@ async def ipcServer(reg, dacQueue, path="/tmp/gpsdo.sock"):
         finally:
             writer.close()
             await writer.wait_closed()
+
     server = await asyncio.start_unix_server(handle, path=path)
     async with server:
         await server.serve_forever()
+
 
 async def main():
     logging.basicConfig(level=logging.INFO)
@@ -153,6 +172,7 @@ async def main():
         await asyncio.gather(*tasks)
     except asyncio.CancelledError:
         pass
+
 
 if __name__ == "__main__":
     asyncio.run(main())

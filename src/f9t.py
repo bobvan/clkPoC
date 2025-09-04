@@ -3,11 +3,12 @@ import serial_asyncio as serialAsyncio
 from pyubx2 import UBXMessage
 from pynmeagps import NMEAReader
 
+
 class F9T:
     def __init__(self, eventBus, port, baud):
         self.eventBus = eventBus
-        self.port     = port
-        self.baud     = baud
+        self.port = port
+        self.baud = baud
 
     async def ubxPrinter(self, msg, raw):
         # Example: show message identity and iTOW if present
@@ -17,17 +18,25 @@ class F9T:
     async def nmeaPrinter(self, msg, raw):
         # Example: show talker+msg type
         # NMEAMessage.identity typically like "GNGGA" / "GPRMC"
-        # print("NMEA", msg)
+        print("NMEA", msg)
         pass
 
-    async def runF9tStream(self, ubxHandler=ubxPrinter, nmeaHandler=nmeaPrinter, dropRtcm=True, readSize=4096):
+    async def runF9tStream(
+        self,
+        ubxHandler=ubxPrinter,
+        nmeaHandler=nmeaPrinter,
+        dropRtcm=True,
+        readSize=4096,
+    ):
         """
         Continuously read a mixed UBX/NMEA/RTCM stream from `port` and:
         • await ubxHandler(ubxMsg, rawBytes) for each UBX frame
         • await nmeaHandler(nmeaMsg, rawBytes) for each NMEA sentence
         RTCM3 frames are discarded when dropRtcm is True.
         """
-        reader, writer = await serialAsyncio.open_serial_connection(url=self.port, baudrate=self.baud)
+        reader, writer = await serialAsyncio.open_serial_connection(
+            url=self.port, baudrate=self.baud
+        )
         buf = bytearray()
 
         try:
@@ -55,7 +64,9 @@ class F9T:
                         # Strip trailing CR/LF for parsing
                         trimmed = rawLine.rstrip(b"\r\n")
                         try:
-                            nmeaMsg = NMEAReader.parse(trimmed.decode("ascii", "ignore"))
+                            nmeaMsg = NMEAReader.parse(
+                                trimmed.decode("ascii", "ignore")
+                            )
                             await nmeaHandler(self, nmeaMsg, rawLine)
                         except Exception as e:
                             # Bad NMEA; resync by continuing
@@ -64,7 +75,7 @@ class F9T:
                         continue
 
                     # Handle RTCM3 frames starting with 0xD3
-                    if dropRtcm and first == b"\xD3":
+                    if dropRtcm and first == b"\xd3":
                         if len(buf) < 3:
                             break  # need more for length
                         rtcmLen = ((buf[1] & 0x03) << 8) | buf[2]
@@ -75,11 +86,11 @@ class F9T:
                         continue
 
                     # UBX hunt: find sync 0xB5 0x62 anywhere in buffer
-                    syncIdx = buf.find(b"\xB5\x62")
+                    syncIdx = buf.find(b"\xb5\x62")
                     if syncIdx == -1:
                         # No UBX in sight; try to align to next known token ($ or 0xD3)
                         nmeaIdx = buf.find(b"$")
-                        rtcmIdx = buf.find(b"\xD3") if dropRtcm else -1
+                        rtcmIdx = buf.find(b"\xd3") if dropRtcm else -1
                         candidates = [i for i in (nmeaIdx, rtcmIdx) if i != -1]
                         if candidates:
                             cut = min(candidates)
