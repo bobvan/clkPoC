@@ -31,3 +31,8 @@
 - [ ] Parquet export for offline analysis.
 - [ ] Temperature compensation feedforward (if sensor available).
 - [ ] On-device metrics endpoint (Prometheus).
+
+Create requirements for venv
+* pyserial-asyncio
+* pyubx2
+* pynmeagps
