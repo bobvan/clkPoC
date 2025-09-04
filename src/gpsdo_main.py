@@ -1,5 +1,5 @@
 # gpsdo_main.py
-import asyncio, serial_asyncio, json, logging, time
+import asyncio, serial_asyncio, json, logging, time, re
 from dataclasses import dataclass
 from enum import Enum
 from pyubx2 import UBXReader
@@ -157,16 +157,29 @@ async def nmeaPrinter(msg, raw):
     # print("NMEA", msg)
     pass
 
-async def ticReader(eventBus, port, baud):
+async def ticReader(eventBus, port, baud, discard_interval=1.0):
     reader, writer = await serial_asyncio.open_serial_connection(url=port, baudrate=baud)
+    start_time = asyncio.get_event_loop().time()  # Get the current time
+    discarded_lines = 0
+
     while True:
         raw = await reader.readline()
-        line = raw.rstrip()
-        # parse a PPS phase sample from the TIC stream
+        line = raw.decode('utf-8').rstrip()
+
+        # Check if we are still within the discard interval
+        if asyncio.get_event_loop().time() - start_time < discard_interval:
+            discarded_lines += 1
+            # XXX log stats here
+            continue  # Skip processing this line
+
+        # Process the line after the discard interval
+        if not re.fullmatch(r"\d+\.\d{12} ch[AB]", line):
+            # XXX log stats here
+            continue  # Ignore the line if it doesn't match
         print("got TIC data", line)
         sample = {"ppsErrorNs": 123}  # placeholder
-        #await eventBus.put(Event(nowNs(), "tic", "ppsSample", sample))
-        #await asyncio.sleep(1.0)
+        # await eventBus.put(Event(nowNs(), "tic", "ppsSample", sample))
+        # await asyncio.sleep(1.0)
 
 async def dacActor(cmdQueue):
     while True:
