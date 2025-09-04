@@ -1,4 +1,6 @@
 import asyncio
+import logging
+from quietDog import QuietDog
 
 import serial_asyncio as serialAsyncio
 from pynmeagps import NMEAReader
@@ -19,7 +21,7 @@ class F9T:
     async def nmeaPrinter(self, msg, raw):
         # Example: show talker+msg type
         # NMEAMessage.identity typically like "GNGGA" / "GPRMC"
-        print("NMEA", msg)
+        #print("NMEA", msg)
         pass
 
     async def runF9tStream(
@@ -38,14 +40,17 @@ class F9T:
         reader, writer = await serialAsyncio.open_serial_connection(
             url=self.port, baudrate=self.baud
         )
+        dog = QuietDog(name=self.port)
+        dogTask = asyncio.create_task(dog.run())
         buf = bytearray()
 
         try:
             while True:
                 chunk = await reader.read(readSize)
                 if not chunk:
-                    await asyncio.sleep(0.01)
-                    continue
+                    logging.warning(f"{self.port}: F9T serial closed or returned zero bytes")
+                    break
+                dog.pet()
                 buf.extend(chunk)
 
                 while True:
@@ -128,10 +133,13 @@ class F9T:
                     await ubxHandler(ubxMsg, rawFrame)
                     del buf[:frameLen]
 
+        # XXX this would be the spot to catch SerialException when F9T is unplugged
         except asyncio.CancelledError:
             # Allow cooperative cancellation
             pass
         finally:
+            dog.stop()
+            await dogTask
             try:
                 writer.close()
             except Exception:
