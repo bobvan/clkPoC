@@ -1,15 +1,19 @@
 # gpsdo_main.py
-import asyncio, json, logging, time, re
-import serial_asyncio as serialAsyncio
+import asyncio
+import json
+import logging
+import re
+import time
 from dataclasses import dataclass
 from enum import Enum
+
+import serial_asyncio as serialAsyncio
 
 from f9t import F9T
 
 # third party imports (install as needed)
 # import aiosqlite
 
-# XXX next up: Turn on a linter
 # XXX next up: Try unplugging F9T and TIC to check error handling
 # XXX next up: Time-bounded consideration of watchdog for F9T and TIC
 # XXX next up: Initialize F9T to output TIM-TP messages and other required state

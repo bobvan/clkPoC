@@ -1,7 +1,8 @@
 import asyncio
+
 import serial_asyncio as serialAsyncio
-from pyubx2 import UBXMessage
 from pynmeagps import NMEAReader
+from pyubx2 import UBXMessage
 
 
 class F9T:
