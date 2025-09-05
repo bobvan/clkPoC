@@ -12,7 +12,7 @@ from enum import Enum
 import serial_asyncio as serialAsyncio
 
 from f9t import F9T
-from quietDog import QuietDog
+from quietWatch import QuietWatch
 
 # third party imports (install as needed)
 # import aiosqlite
@@ -97,7 +97,7 @@ async def ticReader(eventBus, port, baud, discard_interval=1.0):
     # timestamping quickly.
     ticState = TicState.startup
 
-    dog = QuietDog(name=port, warnAfterSec=10)
+    dog = QuietWatch(name=port, warnAfterSec=10)
     dogTask = asyncio.create_task(dog.run())
 
     try:

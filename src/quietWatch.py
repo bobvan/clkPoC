@@ -5,7 +5,7 @@ import time
 # XXX should rechristen as QuietWatch
 
 # Log warning if you don't pet the watchdog within warnAfterSec
-class QuietDog:
+class QuietWatch:
     def __init__(self, name, warnAfterSec=2.0):
         self.name = name
         self.warnAfterSec = warnAfterSec

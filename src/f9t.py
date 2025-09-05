@@ -5,7 +5,7 @@ import serial_asyncio as serialAsyncio
 from pynmeagps import NMEAReader
 from pyubx2 import UBXMessage
 
-from quietDog import QuietDog
+from quietWatch import QuietWatch
 
 
 class F9T:
@@ -41,7 +41,7 @@ class F9T:
         reader, writer = await serialAsyncio.open_serial_connection(
             url=self.port, baudrate=self.baud
         )
-        dog = QuietDog(name=self.port)
+        dog = QuietWatch(name=self.port)
         dogTask = asyncio.create_task(dog.run())
         buf = bytearray()
 
