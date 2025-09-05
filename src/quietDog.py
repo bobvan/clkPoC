@@ -2,6 +2,8 @@ import asyncio
 import logging
 import time
 
+# XXX should rechristen as QuietWatch
+
 # Log warning if you don't pet the watchdog within warnAfterSec
 class QuietDog:
     def __init__(self, name, warnAfterSec=2.0):

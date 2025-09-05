@@ -1,10 +1,11 @@
 import asyncio
 import logging
-from quietDog import QuietDog
 
 import serial_asyncio as serialAsyncio
 from pynmeagps import NMEAReader
 from pyubx2 import UBXMessage
+
+from quietDog import QuietDog
 
 
 class F9T:
@@ -21,7 +22,7 @@ class F9T:
     async def nmeaPrinter(self, msg, raw):
         # Example: show talker+msg type
         # NMEAMessage.identity typically like "GNGGA" / "GPRMC"
-        #print("NMEA", msg)
+        # print("NMEA", msg)
         pass
 
     async def runF9tStream(
@@ -48,7 +49,9 @@ class F9T:
             while True:
                 chunk = await reader.read(readSize)
                 if not chunk:
-                    logging.warning(f"{self.port}: F9T serial closed or returned zero bytes")
+                    logging.warning(
+                        f"{self.port}: F9T serial closed or returned zero bytes"
+                    )
                     break
                 dog.pet()
                 buf.extend(chunk)
@@ -103,7 +106,8 @@ class F9T:
                             if cut > 0:
                                 del buf[:cut]
                                 continue
-                        # Otherwise, keep last byte (might be start of a token) and wait for more data
+                        # Otherwise, keep last byte (might be start of a token) and
+                        # wait for more data
                         if len(buf) > 1:
                             del buf[:-1]
                         break
