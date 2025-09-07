@@ -2,12 +2,14 @@ import asyncio
 import contextlib
 import re
 import termios
+import time
 from enum import Enum
 
 import serial_asyncio as serialAsyncio
 
-from publisher import Publisher
-from quietWatch import QuietWatch
+from clkpoc.clkTypes import TicTs, Ts
+from clkpoc.publisher import Publisher
+from clkpoc.quietWatch import QuietWatch
 
 
 class TicState(Enum):
@@ -95,16 +97,24 @@ class TIC:
                     continue
 
                 # Process lines after configured and stamping
-                pat =  re.compile(r"(\d+)\.(\d{12}) ch([AB])")
+                pat =  re.compile(
+                    r"(?P<integerStr>\d+)\.(?P<fracStr>\d{12}) ch(?P<chan>[AB])")
                 match = pat.fullmatch(line)
                 if not match:
                     # XXX log stats here
                     # print("ignoring TIC line", line)
                     continue  # Ignore the line if it doesn't match a timestamp
+                capNs = time.time_ns()
                 dog.pet()
-                integerPart, fracPart, chan = match.groups()
-                print("got TIC data", integerPart, fracPart, chan)
-                sample = {"ppsErrorNs": 123}  # placeholder
+                capTs = Ts(secs=capNs // 1_000_000_000,
+                           frac=(capNs % 1_000_000_000) / 1_000_000_000)
+                integerStr, fracStr, chan = match.group('integerStr', 'fracStr', 'chan')
+                intPart = int(integerStr)
+                fracPart = float("0." + fracStr)
+                ts = Ts(secs=intPart, frac=fracPart)
+                ticTs = TicTs(ts=ts, capTs=capTs, chan=chan)
+                print("got TIC data", ticTs)
+                # sample = {"ppsErrorNs": 123}  # placeholder
                 # await eventBus.put(Event(nowNs(), "tic", "ppsSample", sample))
                 # await asyncio.sleep(1.0)
         finally:

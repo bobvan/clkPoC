@@ -1,0 +1,5 @@
+{
+  "typeCheckingMode": "off",          // default: no type checking
+  "include": ["src", "tests"],        // parse these so per-file flags are seen
+  "exclude": ["src/legacy", "**/.venv", "**/build"]
+}

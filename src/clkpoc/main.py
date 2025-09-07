@@ -5,15 +5,16 @@ import logging
 import time
 from enum import Enum
 
-from f9t import F9T
-from tic import TIC
+from clkpoc.f9t import F9T
+from clkpoc.tic import TIC
 
 # third party imports (install as needed)
 # import aiosqlite
 
+# XXX next up: Add type hints and a static type checker like mypy
 # XXX next up: Create a new file with EventStream class and import it here
 # XXX next up: Add EventStream subscription to F9T and TIC classes
-# XXX next up: Implement pairPps task that subscirbes to Ts events and publishes when there's a pairing
+# XXX next up: Implement pairPps task that subscirbes to Ts events and publishes when there's a pair
 # XXX next up: Initialize F9T to output TIM-TP messages and other required state
 # XXX next up: Define mapping of chA/B to PPS signals
 # XXX next up: Define IPC messages for TIM-TP message and TIC timestamps with host time
@@ -42,7 +43,8 @@ async def dacActor(cmdQueue):
     while True:
         cmd = await cmdQueue.get()
         if cmd["op"] == "setCode":
-            code = cmd["code"]
+            pass
+            # code = cmd["code"]
             # blocking i2c write wrapped in to_thread(...)
             # await asyncio.to_thread(write_dac, code)
         cmdQueue.task_done()

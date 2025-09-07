@@ -1,8 +1,13 @@
 from __future__ import annotations
-from typing import Optional, Callable, Dict, Any
+
+import os
+import shutil
+import tempfile
+from typing import Any, Callable
+
 from pydantic import BaseModel, ValidationError
 from ruamel.yaml import YAML
-import os, tempfile, shutil
+
 try:
     from filelock import FileLock
 except Exception:
@@ -20,7 +25,7 @@ class Config(BaseModel):
     ticPort: str = "/dev/ttyUSB0"
     ticBaud: int = 115200
     dacAddress: int = 0x4C
-    gpioPpsLine: Optional[int] = None
+    gpioPpsLine: int | None = None
 
     # control loop (τ0 = 1 s baseline)
     kp: float = 0.10
@@ -30,7 +35,7 @@ class Config(BaseModel):
 
     # misc
     logLevel: str = "INFO"
-    notes: Optional[str] = None
+    notes: str | None = None
 
 def yamlLoader():
     y = YAML(typ="rt")  # round-trip preserves comments & ordering
@@ -38,7 +43,7 @@ def yamlLoader():
     return y
 
 # --------- migrations ---------
-def migrateV1ToV2(doc: Dict[str, Any]) -> Dict[str, Any]:
+def migrateV1ToV2(doc: dict[str, Any]) -> dict[str, Any]:
     # Example changes:
     # - gpsPort -> f9tPort
     # - serialBaud -> f9tBaud
@@ -57,7 +62,7 @@ def migrateV1ToV2(doc: Dict[str, Any]) -> Dict[str, Any]:
     doc["schemaVersion"] = 2
     return doc
 
-def migrateV2ToV3(doc: Dict[str, Any]) -> Dict[str, Any]:
+def migrateV2ToV3(doc: dict[str, Any]) -> dict[str, Any]:
     # Example changes:
     # - consolidate loop clamp values; rename log level values; etc.
     if "dacMin" not in doc:
@@ -72,12 +77,12 @@ def migrateV2ToV3(doc: Dict[str, Any]) -> Dict[str, Any]:
     doc["schemaVersion"] = 3
     return doc
 
-MIGRATORS: Dict[int, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
+MIGRATORS: dict[int, Callable[[dict[str, Any]], dict[str, Any]]] = {
     1: migrateV1ToV2,
     2: migrateV2ToV3,
 }
 
-def applyMigrations(doc: Dict[str, Any]) -> Dict[str, Any]:
+def applyMigrations(doc: dict[str, Any]) -> dict[str, Any]:
     version = int(doc.get("schemaVersion", 1))
     while version < CURRENT_SCHEMA_VERSION:
         if version not in MIGRATORS:
@@ -95,7 +100,7 @@ def loadConfig(path: str) -> Config:
         saveConfig(path, cfg, makeBackup=False)
         return cfg
 
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         doc = y.load(f) or {}
 
     # migrate forward
@@ -117,7 +122,7 @@ def saveConfig(path: str, cfg: Config, makeBackup: bool = True) -> None:
     baseDoc = {}
     if os.path.exists(path):
         try:
-            with open(path, "r", encoding="utf-8") as f:
+            with open(path, encoding="utf-8") as f:
                 baseDoc = y.load(f) or {}
         except Exception:
             baseDoc = {}

@@ -1,6 +1,7 @@
 # pip install transitions
 from transitions.extensions.asyncio import AsyncMachine
 
+
 class GpsdoModes:
     states = ["idle", "disciplining", "holdover", "fault"]
     def __init__(self):

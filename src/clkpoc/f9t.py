@@ -5,7 +5,7 @@ import serial_asyncio as serialAsyncio
 from pynmeagps import NMEAReader
 from pyubx2 import UBXMessage
 
-from quietWatch import QuietWatch
+from clkpoc.quietWatch import QuietWatch
 
 
 class F9T:
