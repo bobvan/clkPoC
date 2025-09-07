@@ -2,7 +2,6 @@ import asyncio
 import contextlib
 import re
 import termios
-import time
 from enum import Enum
 
 import serial_asyncio as serialAsyncio
@@ -96,7 +95,13 @@ class TIC:
                 if ticState!=TicState.stamping:
                     continue
 
-                # Process lines after configured and stamping
+                # Process lines after TIC is configured and in stamping state.
+                # The ASCII string representation of timestamps read straight from
+                # the TIC use standard floating point representations, and it
+                # would be convenient to parse them that way, but Python's float
+                # only has 15 digits of precision, and the TIC outputs 12 digits
+                # after the decimal point, so precision could be lost after 100
+                # seconds. So we parse the integer and fractional parts separately.
                 pat =  re.compile(
                     r"(?P<integerStr>\d+)\.(?P<fracStr>\d{12}) ch(?P<chan>[AB])")
                 match = pat.fullmatch(line)
@@ -104,15 +109,11 @@ class TIC:
                     # XXX log stats here
                     # print("ignoring TIC line", line)
                     continue  # Ignore the line if it doesn't match a timestamp
-                capNs = time.time_ns()
                 dog.pet()
-                capTs = Ts(secs=capNs // 1_000_000_000,
-                           frac=(capNs % 1_000_000_000) / 1_000_000_000)
+                capTs = Ts.now()
                 integerStr, fracStr, chan = match.group('integerStr', 'fracStr', 'chan')
-                intPart = int(integerStr)
-                fracPart = float("0." + fracStr)
-                ts = Ts(secs=intPart, frac=fracPart)
-                ticTs = TicTs(ts=ts, capTs=capTs, chan=chan)
+                ppsTs = Ts.fromStr(integerStr, fracStr)
+                ticTs = TicTs(ts=ppsTs, capTs=capTs, chan=chan)
                 print("got TIC data", ticTs)
                 # sample = {"ppsErrorNs": 123}  # placeholder
                 # await eventBus.put(Event(nowNs(), "tic", "ppsSample", sample))

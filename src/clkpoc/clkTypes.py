@@ -1,4 +1,5 @@
 # pyright: basic
+import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Self
@@ -9,63 +10,72 @@ class Ts:
     secs: int # Arbitray precision ints can be in any future relative to the epoch
     frac: float # With the 15-digit precision of floats, we can resolve femtoseconds
 
-    # Denormalized timestamps should be explicitly handled, rather than
-    # transparently handled.
+    # Assertion: denormalized timestamps should be explicitly handled at their
+    # creation time, rather than transparently handled later when accessed.
+    # Nonetheless, assertions watch for denormalized timestamps before access.
     # Keeping the fractional part in the range [0, 1) maintains precision.
 
-    def normalizeByIncDec(self, ts: Self) -> Self:
+    def normalizeByIncDec(self):
         # Normalize by incrementing or decrementing the integer part
-        sec = ts.secs
-        frac = ts.frac
-        if frac < 0:
-            sec -= 1
-            frac += 1
-        if frac >= 1:
-            sec += 1
-            frac -= 1
-        assert (frac >= 0
-            and frac < 1
-            ), f"Fractional result of normailzation {frac} must be in [0, 1)"
-        return Ts(sec, frac)
+        if self.frac < 0:
+            self.secs -= 1
+            self.frac += 1
+        if self.frac >= 1:
+            self.secs += 1
+            self.frac -= 1
+        assert (self.frac >= 0
+            and self.frac < 1
+            ), f"Fractional result of normailzation {self.frac} must be in [0, 1)"
+        return
 
     def subFrom(self, minuend):
         assert (minuend.frac >= 0
             and minuend.frac < 1
             ), f"Fractional part of minuend {minuend.frac} must be in [0, 1)"
-        secDiff = minuend.secs - self.secs
-        fracDiff = minuend.frac - self.frac
-        res = self.normalizeByIncDec(Ts(secDiff, fracDiff))
-        return res
+        self.secs = minuend.secs - self.secs
+        self.frac = minuend.frac - self.frac
+        self.normalizeByIncDec()
+        return
 
-    def asSecAndNsec(self) -> tuple[int, int]:
-        nsec = int(round(self.frac * 1_000_000_000))
-        sec = self.secs
-        if nsec >= 1_000_000_000:
-            sec += 1
-            nsec -= 1_000_000_000
-        if nsec < 0:
-            sec -= 1
-            nsec += 1_000_000_000
-        return sec, nsec
+    @staticmethod
+    def now() -> Self:
+        # Construct Ts set to current time from system clock
+        ns = time.time_ns()
+        return Ts(secs=ns // 1_000_000_000, frac=(ns % 1_000_000_000) / 1_000_000_000)
+
+    @staticmethod
+    def fromStr(integerStr: str, fracStr: str) -> Self:
+        # Construct Ts from separate integer and fractional strings
+        intPart = int(integerStr)
+        fracPart = float("0." + fracStr)
+        return Ts(secs=intPart, frac=fracPart)
+
+    # Return fractional part as string
+    def fracStr(self, places: int = 12) -> str:
+        assert (self.frac >= 0
+            and self.frac < 1
+            ), f"Fractional result of normailzation {self.frac} must be in [0, 1)"
+        return f"{self.frac:.{places}f}"[2:]
+
+    # N.B. The UTC formatting code below assumes that frac has no precision
+    # beyond nanoseconds. A reasonable assumption for timestamps that come
+    # from time_ns().
 
     def isoUtc(self) -> str:
-        sec, nsec = self.asSecAndNsec()
-        base = datetime.fromtimestamp(sec, tz=UTC).strftime(
+        base = datetime.fromtimestamp(self.secs, tz=UTC).strftime(
             "%Y-%m-%dT%H:%M:%S")
-        return f"{base}.{nsec:09d}Z"
+        return f"{base}.{self.fracStr(places=9)}Z"
 
     def isoLocal(self) -> str:
         # system local zone with offset; include 9-digit fraction
-        sec, nsec = self.asSecAndNsec()
-        dt = datetime.fromtimestamp(sec).astimezone()  # local tz
+        dt = datetime.fromtimestamp(self.secs).astimezone()  # local tz
         base = dt.strftime("%Y-%m-%dT%H:%M:%S")
         off = dt.strftime("%z")  # e.g. -0500
         off = off[:-2] + ":" + off[-2:] if off else ""
-        return f"{base}.{nsec:09d}{off}"
+        return f"{base}.{self.fracStr(places=9)}{off}"
 
     def elapsedStr(self) -> str:
-        sec, nsec = self.asSecAndNsec()
-        return f"{sec}.{nsec:09d}s"
+        return f"{self.secs}.{self.fracStr()}s"
 
     def __repr__(self) -> str:
         # unambiguous developer form (great for logs with %r)
@@ -73,11 +83,10 @@ class Ts:
         return f"Ts(secs={sec}, nsec={nsec})"
 
     def __str__(self):
-        frac = f"{self.frac}"
-        # Remove leading "0." if present
-        if frac.startswith("0."):
-            frac = frac[1:]
-        return f"{self.secs}{frac}"
+        if self.secs > 60*60*24*365:
+            return self.isoLocal()
+        else:
+            return self.elapsedStr()
 
     def __format__(self, spec: str) -> str:
         # custom mini-format:
@@ -96,6 +105,9 @@ class TicTs:
     ts: Ts
     capTs: Ts
     chan: str
+
+    def __str__(self):
+        return f"cap {self.capTs:L} tic {self.ts:E} chan {self.chan}"
 
 
 @dataclass

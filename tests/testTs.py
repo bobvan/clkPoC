@@ -7,36 +7,36 @@ class TestTs(unittest.TestCase):
     def test_normalizeByIncDec(self):
         # Test normalization with positive fractional overflow
         ts = Ts(10, 1.2)
-        normalized = ts.normalizeByIncDec(ts)
-        self.assertEqual(normalized.secs, 11)
-        self.assertAlmostEqual(normalized.frac, 0.2)
+        ts.normalizeByIncDec()
+        self.assertEqual(ts.secs, 11)
+        self.assertAlmostEqual(ts.frac, 0.2)
 
         # Test normalization with negative fractional underflow
         ts = Ts(10, -0.5)
-        normalized = ts.normalizeByIncDec(ts)
-        self.assertEqual(normalized.secs, 9)
-        self.assertAlmostEqual(normalized.frac, 0.5)
+        ts.normalizeByIncDec()
+        self.assertEqual(ts.secs, 9)
+        self.assertAlmostEqual(ts.frac, 0.5)
 
         # Test normalization with already normalized timestamp
         ts = Ts(10, 0.5)
-        normalized = ts.normalizeByIncDec(ts)
-        self.assertEqual(normalized.secs, 10)
-        self.assertAlmostEqual(normalized.frac, 0.5)
+        ts.normalizeByIncDec()
+        self.assertEqual(ts.secs, 10)
+        self.assertAlmostEqual(ts.frac, 0.5)
 
     def test_subFrom(self):
         # Test subtraction with no normalization needed
         ts1 = Ts(10, 0.5)
         ts2 = Ts(15, 0.7)
-        result = ts1.subFrom(ts2)
-        self.assertEqual(result.secs, 5)
-        self.assertAlmostEqual(result.frac, 0.2)
+        ts1.subFrom(ts2)
+        self.assertEqual(ts1.secs, 5)
+        self.assertAlmostEqual(ts1.frac, 0.2)
 
         # Test subtraction with normalization needed
         ts1 = Ts(10, 0.8)
         ts2 = Ts(15, 0.2)
-        result = ts1.subFrom(ts2)
-        self.assertEqual(result.secs, 4)
-        self.assertAlmostEqual(result.frac, 0.4)
+        ts1.subFrom(ts2)
+        self.assertEqual(ts1.secs, 4)
+        self.assertAlmostEqual(ts1.frac, 0.4)
 
     def test_asSecAndNsec(self):
         # Test conversion to seconds and nanoseconds
