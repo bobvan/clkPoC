@@ -1,3 +1,4 @@
+# pyright: strict
 import logging
 import time
 from typing import Any, Callable, Optional

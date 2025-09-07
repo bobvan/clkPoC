@@ -1,4 +1,4 @@
-# pyright: basic
+# pyright: strict
 import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -28,7 +28,7 @@ class Ts:
             ), f"Fractional result of normailzation {self.frac} must be in [0, 1)"
         return
 
-    def subFrom(self, minuend):
+    def subFrom(self, minuend: Self):
         assert (minuend.frac >= 0
             and minuend.frac < 1
             ), f"Fractional part of minuend {minuend.frac} must be in [0, 1)"
@@ -37,18 +37,18 @@ class Ts:
         self.normalizeByIncDec()
         return
 
-    @staticmethod
-    def now() -> Self:
+    @classmethod
+    def now(cls: type[Self]) -> Self:
         # Construct Ts set to current time from system clock
         ns = time.time_ns()
-        return Ts(secs=ns // 1_000_000_000, frac=(ns % 1_000_000_000) / 1_000_000_000)
+        return cls(secs=ns // 1_000_000_000, frac=(ns % 1_000_000_000) / 1_000_000_000)
 
-    @staticmethod
-    def fromStr(integerStr: str, fracStr: str) -> Self:
+    @classmethod
+    def fromStr(cls: type[Self], integerStr: str, fracStr: str) -> Self:
         # Construct Ts from separate integer and fractional strings
         intPart = int(integerStr)
         fracPart = float("0." + fracStr)
-        return Ts(secs=intPart, frac=fracPart)
+        return cls(secs=intPart, frac=fracPart)
 
     # Return fractional part as string, without leading "0."
     # N.B. The rounding inherent in converting a float to a string may
@@ -58,7 +58,6 @@ class Ts:
             and self.frac < 1
             ), f"Fractional result of normailzation {self.frac} must be in [0, 1)"
         frac = f"{self.frac:.{places}f}"
-        print(f"DEBUG: fracStr places={places} frac={self.frac} -> '{frac}'")
         return int(frac[0]), frac[2:]
 
     # N.B. The UTC formatting code below assumes that frac has no precision
@@ -86,8 +85,7 @@ class Ts:
 
     def __repr__(self) -> str:
         # unambiguous developer form (great for logs with %r)
-        sec, nsec = self.asSecAndNsec()
-        return f"Ts(secs={sec}, nsec={nsec})"
+        return f"Ts(secs={self.secs}, frac={self.frac}"
 
     def __str__(self):
         if self.secs > 60*60*24*365:

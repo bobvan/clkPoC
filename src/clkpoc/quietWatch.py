@@ -1,12 +1,11 @@
+# pyright: strict
 import asyncio
 import logging
 import time
 
-# XXX should rechristen as QuietWatch
-
 # Log warning if you don't pet the watchdog within warnAfterSec
 class QuietWatch:
-    def __init__(self, name, warnAfterSec=2.0):
+    def __init__(self, name: str, warnAfterSec: float=2.0):
         self.name = name
         self.warnAfterSec = warnAfterSec
         self.lastReadNs = time.monotonic_ns()
