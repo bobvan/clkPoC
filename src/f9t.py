@@ -25,7 +25,7 @@ class F9T:
         # print("NMEA", msg)
         pass
 
-    async def runF9tStream(
+    async def run(
         self,
         ubxHandler=ubxPrinter,
         nmeaHandler=nmeaPrinter,

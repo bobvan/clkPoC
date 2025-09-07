@@ -3,7 +3,6 @@ import asyncio
 import json
 import logging
 import time
-from dataclasses import dataclass
 from enum import Enum
 
 from f9t import F9T
@@ -12,8 +11,10 @@ from tic import TIC
 # third party imports (install as needed)
 # import aiosqlite
 
+# XXX next up: Create a new file with EventStream class and import it here
+# XXX next up: Add EventStream subscription to F9T and TIC classes
+# XXX next up: Implement pairPps task that subscirbes to Ts events and publishes when there's a pairing
 # XXX next up: Initialize F9T to output TIM-TP messages and other required state
-# XXX next up: Figure out what @dataclass does
 # XXX next up: Define mapping of chA/B to PPS signals
 # XXX next up: Define IPC messages for TIM-TP message and TIC timestamps with host time
 
@@ -23,14 +24,6 @@ class Mode(Enum):
     disciplining = 1
     holdover = 2
     fault = 3
-
-
-@dataclass
-class Event:
-    tsMonoNs: int
-    source: str
-    kind: str
-    data: dict
 
 
 def nowNs():

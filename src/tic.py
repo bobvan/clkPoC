@@ -6,6 +6,7 @@ from enum import Enum
 
 import serial_asyncio as serialAsyncio
 
+from publisher import Publisher
 from quietWatch import QuietWatch
 
 
@@ -24,6 +25,7 @@ class TIC:
         self.baud = baud
         self.ticState = TicState.startup
         self.dog = QuietWatch(name=port, warnAfterSec=10)
+        self.pps = Publisher("TIC", warnIfSlowMs=5.0)
 
     async def run(self):
         reader, writer = await serialAsyncio.open_serial_connection(
@@ -93,12 +95,15 @@ class TIC:
                     continue
 
                 # Process lines after configured and stamping
-                if not re.fullmatch(r"\d+\.\d{12} ch[AB]", line):
+                pat =  re.compile(r"(\d+)\.(\d{12}) ch([AB])")
+                match = pat.fullmatch(line)
+                if not match:
                     # XXX log stats here
                     # print("ignoring TIC line", line)
                     continue  # Ignore the line if it doesn't match a timestamp
                 dog.pet()
-                print("got TIC data", line)
+                integerPart, fracPart, chan = match.groups()
+                print("got TIC data", integerPart, fracPart, chan)
                 sample = {"ppsErrorNs": 123}  # placeholder
                 # await eventBus.put(Event(nowNs(), "tic", "ppsSample", sample))
                 # await asyncio.sleep(1.0)
