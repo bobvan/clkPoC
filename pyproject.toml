@@ -34,6 +34,9 @@ reportUnknownVariableType = true
 venvPath = "."
 venv = "venv"
 exclude = ["**/venv/**", "**/build/**", "**/.mypy_cache/**"]
+typeStubPath = ["typings"]
+useLibraryCodeForTypes = true
+#reportMissingTypeStubs = false
 
 [tool.mypy]
 python_version = "3.11"

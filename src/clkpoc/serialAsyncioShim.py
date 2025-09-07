@@ -1,47 +1,64 @@
 # pyright: basic
+# ChatGPT wrote this shim to quiet pyright because I was running into a typing mismatch,
+# not a runtime bug.
+# 	•	serial_asyncio.open_serial_connection() returns a StreamReader and StreamWriter.
+# 	•	In typeshed, StreamWriter.transport is typed as asyncio.transports.WriteTransport.
+# 	•	But the actual transport for a serial connection implements read methods too
+#       (pause_reading/resume_reading) — it’s just not reflected in the type.
+# 
+# So Pyright complains because WriteTransport doesnt declare pause_reading/resume_reading.
+# And it also warns that get_extra_info("serial") might be None before you call .fileno().
+
 import asyncio
-from typing import Any, cast
+from types import TracebackType
+from typing import Any, Protocol, Self, cast
 
-from typing_extensions import Protocol
 
-
-# A tiny protocol that matches what serial_asyncio’s transport actually offers
+# Transport that actually supports pause/resume (serial_asyncio provides this at runtime)
 class ReadWriteTransport(Protocol):
     def pause_reading(self) -> None: ...
     def resume_reading(self) -> None: ...
     def get_extra_info(self, name: str, default: Any | None = None) -> Any: ...
-    # .serial attribute exists on pyserial-asyncio transports; treat as optional
-    serial: Any  # you can narrow this to serial.SerialBase if you import pyserial types
+    serial: Any  # some versions expose the pyserial object here
+
+# Minimal protocol for the underlying pyserial object (we only need fileno())
+class HasFileno(Protocol):
+    def fileno(self) -> int: ...
 
 def asReadWriteTransport(writer: asyncio.StreamWriter) -> ReadWriteTransport:
     t = writer.transport
-    # Optional safety: assert the transport really supports pause/resume at runtime
     if not hasattr(t, "pause_reading") or not hasattr(t, "resume_reading"):
         raise RuntimeError("transport does not support pause/resume reading")
     return cast(ReadWriteTransport, t)
 
-def getSerialObj(writer: asyncio.StreamWriter) -> Any:
+def getSerialObj(writer: asyncio.StreamWriter) -> HasFileno:
     t = asReadWriteTransport(writer)
     ser = t.get_extra_info("serial", None)
     if ser is None:
-        # some versions also expose .serial attribute
         ser = getattr(t, "serial", None)
-    if ser is None:
-        raise RuntimeError("no underlying serial object available")
-    return ser
+    if ser is None or not hasattr(ser, "fileno"):
+        raise RuntimeError("no underlying serial object with fileno() available")
+    return cast(HasFileno, ser)
 
-class pausedReads:
-    """Context manager to pause/resume reads around critical sections."""
-    def __init__(self, writer: asyncio.StreamWriter):
+class PausedReads:
+    """Context manager: pause reads on enter, resume on exit."""
+
+    def __init__(self, writer: asyncio.StreamWriter) -> None:
         self.writer = writer
         self.t: ReadWriteTransport | None = None
 
-    def __enter__(self):
+    def __enter__(self) -> Self:
         self.t = asReadWriteTransport(self.writer)
         self.t.pause_reading()
         return self
 
-    def __exit__(self, exc_type, exc, tb):
+    def __exit__(
+        self,
+        excType: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: TracebackType | None,
+    ) -> bool:
+        # Always resume; return False so any exception propagates
         assert self.t is not None
         self.t.resume_reading()
         return False

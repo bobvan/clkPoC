@@ -1,16 +1,17 @@
-# pyright: basic
+# pyright: strict
 import asyncio
 import contextlib
 import re
 import termios
 from enum import Enum
+from typing import Any
 
 import serial_asyncio as serialAsyncio
 
 from clkpoc.clkTypes import TicTs, Ts
 from clkpoc.publisher import Publisher
 from clkpoc.quietWatch import QuietWatch
-from clkpoc.serialAsyncioShim import getSerialObj, pausedReads
+from clkpoc.serialAsyncioShim import PausedReads, getSerialObj
 
 
 class TicState(Enum):
@@ -22,7 +23,7 @@ class TicState(Enum):
 
 
 class TIC:
-    def __init__(self, eventBus, port, baud):
+    def __init__(self, eventBus: asyncio.Queue[Any], port: str, baud: int):
         self.eventBus = eventBus
         self.port = port
         self.baud = baud
@@ -41,7 +42,7 @@ class TIC:
         # next open, so we set HUPCL if it's not set.
         #
         # Pause callbacks while we tweak termios
-        with pausedReads(writer):
+        with PausedReads(writer):
             serialObj = getSerialObj(writer)
             fd = serialObj.fileno()
             attrs = termios.tcgetattr(fd)
