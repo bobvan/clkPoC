@@ -50,32 +50,39 @@ class Ts:
         fracPart = float("0." + fracStr)
         return Ts(secs=intPart, frac=fracPart)
 
-    # Return fractional part as string
-    def fracStr(self, places: int = 12) -> str:
+    # Return fractional part as string, without leading "0."
+    # N.B. The rounding inherent in converting a float to a string may
+    # produce a carry into the integer part, which is returned as well.
+    def fracStr(self, places: int = 12) -> tuple[int, str]:
         assert (self.frac >= 0
             and self.frac < 1
             ), f"Fractional result of normailzation {self.frac} must be in [0, 1)"
-        return f"{self.frac:.{places}f}"[2:]
+        frac = f"{self.frac:.{places}f}"
+        print(f"DEBUG: fracStr places={places} frac={self.frac} -> '{frac}'")
+        return int(frac[0]), frac[2:]
 
     # N.B. The UTC formatting code below assumes that frac has no precision
     # beyond nanoseconds. A reasonable assumption for timestamps that come
     # from time_ns().
 
     def isoUtc(self) -> str:
-        base = datetime.fromtimestamp(self.secs, tz=UTC).strftime(
+        carry, frac = self.fracStr(places=9)
+        base = datetime.fromtimestamp(self.secs+carry, tz=UTC).strftime(
             "%Y-%m-%dT%H:%M:%S")
-        return f"{base}.{self.fracStr(places=9)}Z"
+        return f"{base}.{frac}Z"
 
     def isoLocal(self) -> str:
         # system local zone with offset; include 9-digit fraction
-        dt = datetime.fromtimestamp(self.secs).astimezone()  # local tz
+        carry, frac = self.fracStr(places=9)
+        dt = datetime.fromtimestamp(self.secs+carry).astimezone()  # local tz
         base = dt.strftime("%Y-%m-%dT%H:%M:%S")
         off = dt.strftime("%z")  # e.g. -0500
         off = off[:-2] + ":" + off[-2:] if off else ""
-        return f"{base}.{self.fracStr(places=9)}{off}"
+        return f"{base}.{frac}{off}"
 
     def elapsedStr(self) -> str:
-        return f"{self.secs}.{self.fracStr()}s"
+        carry, frac = self.fracStr()
+        return f"{self.secs+carry}.{frac}s"
 
     def __repr__(self) -> str:
         # unambiguous developer form (great for logs with %r)

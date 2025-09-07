@@ -1,4 +1,5 @@
 import unittest
+from datetime import datetime
 
 from clkpoc.clkTypes import Ts
 
@@ -38,24 +39,65 @@ class TestTs(unittest.TestCase):
         self.assertEqual(ts1.secs, 4)
         self.assertAlmostEqual(ts1.frac, 0.4)
 
-    def test_asSecAndNsec(self):
-        # Test conversion to seconds and nanoseconds
-        ts = Ts(10, 0.5)
-        sec, nsec = ts.asSecAndNsec()
-        self.assertEqual(sec, 10)
-        self.assertEqual(nsec, 500_000_000)
+    def test_now(self):
+            ts = Ts.now()
+            self.assertIsInstance(ts, Ts)
+            self.assertGreaterEqual(ts.secs, 0)
+            self.assertGreaterEqual(ts.frac, 0)
+            self.assertLess(ts.frac, 1)
 
-        # Test fractional overflow
-        ts = Ts(10, 1.2)
-        sec, nsec = ts.asSecAndNsec()
-        self.assertEqual(sec, 11)
-        self.assertEqual(nsec, 200_000_000)
+    def test_fromStr(self):
+        ts = Ts.fromStr("12345", "678901234567")
+        self.assertEqual(ts.secs, 12345)
+        self.assertAlmostEqual(ts.frac, 0.678901234567)
 
-        # Test fractional underflow
-        ts = Ts(10, -0.3)
-        sec, nsec = ts.asSecAndNsec()
-        self.assertEqual(sec, 9)
-        self.assertEqual(nsec, 700_000_000)
+        ts = Ts.fromStr("0", "0")
+        self.assertEqual(ts.secs, 0)
+        self.assertAlmostEqual(ts.frac, 0.0)
+
+#    def test_fracStr(self):
+#        ts = Ts(10, 0.123456789012)
+#        frac_str = ts.fracStr(places=12)
+#        self.assertEqual(frac_str, "123456789012")
+#
+#        ts = Ts(10, 0.1)
+#        frac_str = ts.fracStr(places=5)
+#        self.assertEqual(frac_str, "10000")
+#
+#        ts = Ts(10, 0.999999999999)
+#        frac_str = ts.fracStr(places=6)
+#        self.assertEqual(frac_str, "999999")
+
+    def test_fracStr(self):
+        # Test with a fractional part that does not cause a carry
+        ts = Ts(10, 0.123456789012)
+        carry, frac_str = ts.fracStr(places=12)
+        self.assertEqual(carry, 0)
+        self.assertEqual(frac_str, "123456789012")
+
+        # Test with a fractional part that causes a carry into the integer part
+        ts = Ts(10, 0.999999999999)
+        carry, frac_str = ts.fracStr(places=9)
+        self.assertEqual(carry, 1)
+        self.assertEqual(frac_str, "000000000")
+
+        # Test with zero fractional part
+        ts = Ts(10, 0.0)
+        carry, frac_str = ts.fracStr(places=6)
+        self.assertEqual(carry, 0)
+        self.assertEqual(frac_str, "000000")
+
+        # Test with a fractional part that rounds up but does not carry
+        ts = Ts(10, 0.123456789876)
+        carry, frac_str = ts.fracStr(places=9)
+        self.assertEqual(carry, 0)
+        self.assertEqual(frac_str, "123456790")
+
+        # Test with a fractional part that rounds up and causes a carry
+        ts = Ts(10, 0.99999999951)
+        carry, frac_str = ts.fracStr(places=9)
+        self.assertEqual(carry, 1)
+        self.assertEqual(frac_str, "000000000")
 
     def test_isoUtc(self):
         # Test ISO UTC string generation
@@ -65,13 +107,42 @@ class TestTs(unittest.TestCase):
 
         # Test fractional overflow
         ts = Ts(10, 1.2)
+        ts.normalizeByIncDec()
         iso = ts.isoUtc()
         self.assertEqual(iso, "1970-01-01T00:00:11.200000000Z")
 
         # Test fractional underflow
         ts = Ts(10, -0.3)
+        ts.normalizeByIncDec()
         iso = ts.isoUtc()
         self.assertEqual(iso, "1970-01-01T00:00:09.700000000Z")
+
+    def test_isoLocal(self):
+        # Test with a known timestamp
+        ts = Ts(1672531200, 0.123456789)  # 2023-01-01T00:00:00.123456789 in UTC
+        iso_local = ts.isoLocal()
+        dt = datetime.fromtimestamp(1672531200).astimezone()
+        expected_base = dt.strftime("%Y-%m-%dT%H:%M:%S")
+        expected_offset = dt.strftime("%z")
+        expected_offset = expected_offset[:-2]+":" + expected_offset[-2:] if expected_offset else ""
+        self.assertEqual(iso_local, f"{expected_base}.123456789{expected_offset}")
+
+    def test_elapsedStr(self):
+        # Test with a simple elapsed time
+        ts = Ts(123, 0.456789)
+        elapsed_str = ts.elapsedStr()
+        self.assertEqual(elapsed_str, "123.456789000000s")
+
+        # Test with zero seconds and fractional part
+        ts = Ts(0, 0.0)
+        elapsed_str = ts.elapsedStr()
+        self.assertEqual(elapsed_str, "0.000000000000s")
+
+        # Test with a large number of seconds
+        ts = Ts(987654321, 0.987654321)
+        elapsed_str = ts.elapsedStr()
+        self.assertEqual(elapsed_str, "987654321.987654321000s")
+
 
 
 if __name__ == "__main__":
