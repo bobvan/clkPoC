@@ -3,6 +3,7 @@ import asyncio
 import logging
 import time
 
+
 # Log warning if you don't pet the watchdog within warnAfterSec
 class QuietWatch:
     def __init__(self, name: str, warnAfterSec: float=2.0):

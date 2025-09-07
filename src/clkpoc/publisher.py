@@ -1,7 +1,8 @@
 # pyright: strict
 import logging
 import time
-from typing import Any, Callable, Optional
+from collections.abc import Callable
+from typing import Any
 
 
 class Publisher:
@@ -12,7 +13,7 @@ class Publisher:
       - unsub(callback) removes a subscriber
       - warns if a callback raises or runs too long
     """
-    def __init__(self, name: str, warnIfSlowMs: Optional[float] = None):
+    def __init__(self, name: str, warnIfSlowMs: float | None = None):
         self.name = name
         self.warnIfSlowMs = warnIfSlowMs
         self.subscribers: list[Callable[[Any], None]] = []

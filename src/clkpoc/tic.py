@@ -1,3 +1,4 @@
+# pyright: basic
 import asyncio
 import contextlib
 import re
@@ -9,6 +10,7 @@ import serial_asyncio as serialAsyncio
 from clkpoc.clkTypes import TicTs, Ts
 from clkpoc.publisher import Publisher
 from clkpoc.quietWatch import QuietWatch
+from clkpoc.serialAsyncioShim import getSerialObj, pausedReads
 
 
 class TicState(Enum):
@@ -31,8 +33,7 @@ class TIC:
     async def run(self):
         reader, writer = await serialAsyncio.open_serial_connection(
             url=self.port, baudrate=self.baud
-        )
-        transport = writer.transport
+        ) # When this is changed, note copy below for reopening
 
         # If the last guy to open the TIC's serial port didn't set HUPCL, we may see
         # garbled output at first, then timestamps continuing from the previous run.
@@ -40,11 +41,8 @@ class TIC:
         # next open, so we set HUPCL if it's not set.
         #
         # Pause callbacks while we tweak termios
-        transport.pause_reading()
-        try:
-            serialObj = (
-                transport.get_extra_info("serial") or getattr(transport, "serial", None)
-            )
+        with pausedReads(writer):
+            serialObj = getSerialObj(writer)
             fd = serialObj.fileno()
             attrs = termios.tcgetattr(fd)
             cflag = attrs[2]
@@ -62,9 +60,6 @@ class TIC:
                 reader, writer = await serialAsyncio.open_serial_connection(
                     url=self.port, baudrate=self.baud
                 )
-
-        finally:
-            transport.resume_reading()
 
         # Opening the port this way means the TIC is always in its startup state.
         # We run through the config menu to quickly reset it to all defaults and start
