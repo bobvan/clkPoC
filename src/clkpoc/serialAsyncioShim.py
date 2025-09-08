@@ -1,11 +1,10 @@
-# pyright: basic
 # ChatGPT wrote this shim to quiet pyright because I was running into a typing mismatch,
 # not a runtime bug.
 # 	•	serial_asyncio.open_serial_connection() returns a StreamReader and StreamWriter.
 # 	•	In typeshed, StreamWriter.transport is typed as asyncio.transports.WriteTransport.
 # 	•	But the actual transport for a serial connection implements read methods too
 #       (pause_reading/resume_reading) — it’s just not reflected in the type.
-# 
+#
 # So Pyright complains because WriteTransport doesnt declare pause_reading/resume_reading.
 # And it also warns that get_extra_info("serial") might be None before you call .fileno().
 

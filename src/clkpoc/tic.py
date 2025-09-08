@@ -1,4 +1,3 @@
-# pyright: strict
 import asyncio
 import contextlib
 import re

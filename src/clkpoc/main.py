@@ -11,13 +11,13 @@ from clkpoc.tic import TIC
 # third party imports (install as needed)
 # import aiosqlite
 
-# XXX next up: Add type hints and a static type checker like pyright
 # XXX next up: Create a new file with EventStream class and import it here
 # XXX next up: Add EventStream subscription to F9T and TIC classes
 # XXX next up: Implement pairPps task that subscirbes to Ts events and publishes when there's a pair
 # XXX next up: Initialize F9T to output TIM-TP messages and other required state
 # XXX next up: Define mapping of chA/B to PPS signals
 # XXX next up: Define IPC messages for TIM-TP message and TIC timestamps with host time
+# XXX next up: Clean up main.py and enable strict type checking
 
 
 class Mode(Enum):

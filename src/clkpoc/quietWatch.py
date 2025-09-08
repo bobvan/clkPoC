@@ -1,4 +1,3 @@
-# pyright: strict
 import asyncio
 import logging
 import time
