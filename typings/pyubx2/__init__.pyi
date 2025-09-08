@@ -1,18 +1,16 @@
-from typing import Any, Iterable, Tuple, Optional, Protocol
+# typings/pyubx2/__init__.pyi
+from typing import Any
 
-class UBXMessage(Protocol):
+class UBXMessage:
     identity: str
-    clsID: Optional[int]
-    msgID: Optional[int]
+    clsID: int | None
+    msgID: int | None
+
+    def __init__(self, msgClass: Any, msgID: Any, *args: Any, **kwargs: Any) -> None: ...
     def serialize(self) -> bytes: ...
 
 class UBXReader:
     def __init__(self, stream: Any, **kwargs: Any) -> None: ...
-    def read(self) -> Tuple[bytes, Optional[UBXMessage]]: ...
+    def read(self) -> tuple[bytes, UBXMessage | None]: ...
     @staticmethod
-    def parse(data: bytes) -> Iterable[UBXMessage]: ...
-
-# factory function used to build messages
-def UBXMessage(
-    msgClass: Any, msgID: Any, *args: Any, **kwargs: Any
-) -> UBXMessage: ...
+    def parse(data: bytes) -> UBXMessage: ...

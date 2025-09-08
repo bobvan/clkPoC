@@ -1,6 +1,7 @@
-# pyright: basic
+# pyright: strict
 import asyncio
 import logging
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 import serial_asyncio as serialAsyncio
@@ -9,6 +10,9 @@ from pyubx2 import UBXMessage, UBXReader
 
 from clkpoc.quietWatch import QuietWatch
 
+# Handler type aliases
+UbxHandler = Callable[[UBXMessage, bytes], Awaitable[None]]
+NmeaHandler = Callable[[NMEAMessage, bytes], Awaitable[None]]
 
 class F9T:
     def __init__(self, eventBus: asyncio.Queue[Any], port: str, baud: int):
@@ -16,30 +20,36 @@ class F9T:
         self.port = port
         self.baud = baud
 
-    async def ubxPrinter(self, msg: UBXMessage, raw: bytes):
+    async def ubxPrinter(self, msg: UBXMessage, raw: bytes) -> None:
         # Example: show message identity and iTOW if present
         itow = getattr(msg, "iTOW", None)
         print("UBX", msg.identity, itow)
 
-    async def nmeaPrinter(self, msg: NMEAMessage, raw: bytes):
+    async def nmeaPrinter(self, msg: NMEAMessage, raw: bytes) -> None:
         # Example: show talker+msg type
         # NMEAMessage.identity typically like "GNGGA" / "GPRMC"
-        print("NMEA", msg)
+        # print("NMEA", msg)
         pass
 
     async def run(
-        self,
-        ubxHandler=ubxPrinter,
-        nmeaHandler=nmeaPrinter,
-        dropRtcm=True,
-        readSize=4096,
-    ):
+            self,
+            ubxHandler: UbxHandler | None = None,
+            nmeaHandler: NmeaHandler | None = None,
+            dropRtcm: bool = True,
+            readSize: int = 4096,
+        ) -> None:
         """
         Continuously read a mixed UBX/NMEA/RTCM stream from `port` and:
         • await ubxHandler(ubxMsg, rawBytes) for each UBX frame
         • await nmeaHandler(nmeaMsg, rawBytes) for each NMEA sentence
         RTCM3 frames are discarded when dropRtcm is True.
         """
+        # bind defaults to *this instance* when not provided
+        if ubxHandler is None:
+            ubxHandler = self.ubxPrinter
+        if nmeaHandler is None:
+            nmeaHandler = self.nmeaPrinter
+
         reader, writer = await serialAsyncio.open_serial_connection(
             url=self.port, baudrate=self.baud
         )
@@ -63,7 +73,7 @@ class F9T:
                         break
 
                     # Fast path when buffer starts with a known token
-                    first = buf[0:1]
+                    first = bytes(buf[0:1])
 
                     # Handle NMEA lines starting with '$'
                     if first == b"$":
@@ -76,7 +86,7 @@ class F9T:
                         trimmed = rawLine.rstrip(b"\r\n")
                         try:
                             nmeaMsg = NMEAReader.parse(trimmed)
-                            await nmeaHandler(self, nmeaMsg, rawLine)
+                            await nmeaHandler(nmeaMsg, rawLine)
                         except Exception as e:
                             # Bad NMEA; resync by continuing
                             print(f"A NMEA parsing error occurred: {e}")
