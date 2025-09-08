@@ -1,28 +1,30 @@
+# pyright: basic
 import asyncio
 import logging
+from typing import Any
 
 import serial_asyncio as serialAsyncio
-from pynmeagps import NMEAReader
-from pyubx2 import UBXMessage
+from pynmeagps import NMEAMessage, NMEAReader
+from pyubx2 import UBXMessage, UBXReader
 
 from clkpoc.quietWatch import QuietWatch
 
 
 class F9T:
-    def __init__(self, eventBus, port, baud):
+    def __init__(self, eventBus: asyncio.Queue[Any], port: str, baud: int):
         self.eventBus = eventBus
         self.port = port
         self.baud = baud
 
-    async def ubxPrinter(self, msg, raw):
+    async def ubxPrinter(self, msg: UBXMessage, raw: bytes):
         # Example: show message identity and iTOW if present
         itow = getattr(msg, "iTOW", None)
         print("UBX", msg.identity, itow)
 
-    async def nmeaPrinter(self, msg, raw):
+    async def nmeaPrinter(self, msg: NMEAMessage, raw: bytes):
         # Example: show talker+msg type
         # NMEAMessage.identity typically like "GNGGA" / "GPRMC"
-        # print("NMEA", msg)
+        print("NMEA", msg)
         pass
 
     async def run(
@@ -73,9 +75,7 @@ class F9T:
                         # Strip trailing CR/LF for parsing
                         trimmed = rawLine.rstrip(b"\r\n")
                         try:
-                            nmeaMsg = NMEAReader.parse(
-                                trimmed.decode("ascii", "ignore")
-                            )
+                            nmeaMsg = NMEAReader.parse(trimmed)
                             await nmeaHandler(self, nmeaMsg, rawLine)
                         except Exception as e:
                             # Bad NMEA; resync by continuing
@@ -127,7 +127,7 @@ class F9T:
 
                     rawFrame = bytes(buf[:frameLen])
                     try:
-                        ubxMsg = UBXMessage.parse(rawFrame)
+                        ubxMsg = UBXReader.parse(rawFrame)
                     except Exception:
                         # Drop one byte to resync and keep scanning
                         del buf[0:1]

@@ -1,4 +1,4 @@
-# gpsdo_main.py
+# pyright: basic
 import asyncio
 import json
 import logging
@@ -11,7 +11,7 @@ from clkpoc.tic import TIC
 # third party imports (install as needed)
 # import aiosqlite
 
-# XXX next up: Add type hints and a static type checker like mypy
+# XXX next up: Add type hints and a static type checker like pyright
 # XXX next up: Create a new file with EventStream class and import it here
 # XXX next up: Add EventStream subscription to F9T and TIC classes
 # XXX next up: Implement pairPps task that subscirbes to Ts events and publishes when there's a pair
