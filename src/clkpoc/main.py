@@ -5,6 +5,8 @@ import logging
 import time
 from enum import Enum
 
+from clkpoc.df.pairPps import PairPps
+from clkpoc.dfPpsCsvLog import PpsCsvLog
 from clkpoc.f9t import F9T
 from clkpoc.tic import TIC
 
@@ -130,6 +132,9 @@ async def main():
     dacQueue = asyncio.Queue()
     f9t = F9T(eventBus, "/dev/ttyACM1", 9600)
     tic = TIC(eventBus, "/dev/ttyACM0", 115200)
+    PpsCsvLog(tic, "ppsGnsOnRef", "ppsGns.csv")
+    PpsCsvLog(tic, "ppsDscOnRef", "ppsDsc.csv")
+    pairPps = PairPps(tic, "ppsGnsOnRef", "ppsDscOnRef")
     tasks = [
         asyncio.create_task(f9t.run()),
         asyncio.create_task(tic.run()),

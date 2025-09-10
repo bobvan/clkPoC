@@ -8,9 +8,9 @@ from typing import Any
 import serial_asyncio as serialAsyncio
 
 from clkpoc.clkTypes import TicTs, Ts
-from clkpoc.publisher import Publisher
 from clkpoc.quietWatch import QuietWatch
 from clkpoc.serialAsyncioShim import PausedReads, getSerialObj
+from clkpoc.topicPublisher import TopicPublisher
 
 
 class TicState(Enum):
@@ -28,7 +28,15 @@ class TIC:
         self.baud = baud
         self.ticState = TicState.startup
         self.dog = QuietWatch(name=port, warnAfterSec=10)
-        self.pps = Publisher("TIC", warnIfSlowMs=5.0)
+        self.pub = TopicPublisher("tic", warnIfSlowMs=5.0)
+
+    def ppsPub(self, ticTs: TicTs, chan: str) -> None:
+        if   chan == 'A':
+            self.pub.publish("ppsDscOnRef", ticTs)
+        elif chan == 'B':
+            self.pub.publish("ppsGnsOnRef", ticTs)
+        else:
+            raise AssertionError(f"ppsPub unexpected chan {chan}")
 
     async def run(self):
         reader, writer = await serialAsyncio.open_serial_connection(
@@ -107,9 +115,10 @@ class TIC:
                 dog.pet()
                 capTs = Ts.now()
                 integerStr, fracStr, chan = match.group('integerStr', 'fracStr', 'chan')
-                ppsTs = Ts.fromStr(integerStr, fracStr)
-                ticTs = TicTs(ts=ppsTs, capTs=capTs, chan=chan)
+                refTs = Ts.fromStr(integerStr, fracStr)
+                ticTs = TicTs(refTs=refTs, capTs=capTs)
                 print("got TIC data", ticTs)
+                self.ppsPub(ticTs, chan)
                 # sample = {"ppsErrorNs": 123}  # placeholder
                 # await eventBus.put(Event(nowNs(), "tic", "ppsSample", sample))
                 # await asyncio.sleep(1.0)

@@ -12,6 +12,10 @@ class Publisher:
       - unsub(callback) removes a subscriber
       - warns if a callback raises or runs too long
     """
+    # I'm concerned that warning about slow callback may cause future
+    # callbacks to run more slowly, perhaps due to cache misses and
+    # downstream consequences of complex system behavior.
+    # Watch out for positive feedback on such warnings.
     def __init__(self, name: str, warnIfSlowMs: float | None = None):
         self.name = name
         self.warnIfSlowMs = warnIfSlowMs
