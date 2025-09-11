@@ -46,7 +46,7 @@ class TestTs(unittest.TestCase):
             self.assertIsInstance(ts, Ts)
             self.assertGreaterEqual(ts.secs, 0)
             self.assertGreaterEqual(ts.frac, 0)
-            self.assertLess(ts.frac, 1)
+            self.assertLess(ts.frac, 1000000000000)
 
     def test_fromStr(self):
         ts = Ts.fromStr("12345", "678901234567")
