@@ -1,6 +1,9 @@
 [project]
 name = "clkpoc"
 version = "0.0.0"
+description = "Accurate GNSS Clock Proof of Concept"
+readme = "README.md"
+license = "BSD-3-Clause"
 requires-python = ">=3.11"
 
 [build-system]
@@ -14,6 +17,7 @@ package-dir = {"" = "src"}
 where = ["src"]
 
 [tool.pytest.ini_options]
+minversion = "8.0"
 addopts = "-q -ra --strict-markers --strict-config --cov=src --cov-report=lcov:lcov.info --cov-fail-under=50"
 testpaths = ["tests"]
 python_files = ["test*.py"]      # allow testTs.py
@@ -30,10 +34,6 @@ source = ["src"]
 [tool.pyright]
 pythonVersion = "3.11"
 typeCheckingMode = "strict"
-reportUnknownParameterType = true
-reportUnknownArgumentType = true
-reportUnknownMemberType = true
-reportUnknownVariableType = true
 venvPath = "."
 venv = "venv"
 exclude = ["aux", "**/venv/**", "**/build/**", "**/.mypy_cache/**"]
@@ -43,6 +43,7 @@ useLibraryCodeForTypes = true
 
 [tool.mypy]
 python_version = "3.11"
+mypy_path = ["typings"]
 warn_unused_ignores = true
 warn_redundant_casts = true
 warn_no_return = true
@@ -50,7 +51,7 @@ disallow_any_generics = true
 disallow_untyped_defs = true
 no_implicit_optional = true
 strict_equality = true
-exclude = '(^\.venv/|/build/|/.mypy_cache/)'
+exclude = '(^venv/|/build/|/.mypy_cache/)'
 
 [tool.ruff]
 lint.select = ["E","F","I","UP","B"]
