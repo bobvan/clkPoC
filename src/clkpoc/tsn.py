@@ -61,6 +61,61 @@ class Tsn:
     def sub(self: Self, other: Self) -> Self: # XXX make this subFrom()
         return type(self)(self.units - other.units)
 
+    def roundQuotientToEven(self, num: int, den: int) -> int:
+        # Internal helper: compute round-to-even of num/den to an int.
+        # Assumes den > 0. Works for negative numerators.
+        q, rem = divmod(num, den)
+        # Python's divmod with negative num returns q truncated toward -inf.
+        # For ties-to-even, compare 2*|rem| with den.
+        # Adjust remainder sign: rem has same sign as den (non-negative).
+        # We need symmetric remainder magnitude around zero, so recompute.
+        # Re-derive remainder magnitude from exact relation: num = q*den + r
+        r = num - q * den
+        twoAbsR = abs(r) * 2
+        if twoAbsR > den or (twoAbsR == den and (q & 1) != 0):
+            q += 1 if num >= 0 else -1
+        return int(q)
+
+    def multiply(self: Self, factor: int | float) -> Self:
+        """Return a new Tsn scaled by factor.
+        - If factor is int: exact scaling.
+        - If factor is float: compute exactly via as_integer_ratio and round to nearest picosecond (ties to even).
+        """
+        if isinstance(factor, int):
+            return type(self)(self.units * factor)
+        if isinstance(factor, float):
+            n, d = factor.as_integer_ratio()
+            # scale units by n/d with round-to-even
+            q = self.roundQuotientToEven(self.units * n, d)
+            return type(self)(q)
+        raise TypeError("factor must be int or float")
+
+    def divide(self: Self, value: int | float | Self) -> Self | float:
+        """Divide this Tsn.
+        - If value is int: return Tsn scaled by 1/value with round-to-even to picoseconds.
+        - If value is float: same as above using as_integer_ratio.
+        - If value is Tsn: return dimensionless ratio self/value as float.
+        """
+        if isinstance(value, int):
+            if value == 0:
+                raise ZeroDivisionError("division by zero")
+            q = self.roundQuotientToEven(self.units, value)
+            return type(self)(q)
+        if isinstance(value, float):
+            if value == 0.0:
+                raise ZeroDivisionError("division by zero")
+            n, d = value.as_integer_ratio()  # value == n/d
+            # self / value == self * (d/n)
+            if n == 0:
+                raise ZeroDivisionError("division by zero")
+            q = self.roundQuotientToEven(self.units * d, n)
+            return type(self)(q)
+        if isinstance(value, type(self)):
+            if value.units == 0:
+                raise ZeroDivisionError("division by zero")
+            return self.units / value.units
+        raise TypeError("value must be int, float, or Tsn")
+
     def toDecimal(self, places: int = fracDigs) -> str:
         if places < 0 or places > self.fracDigs:
             raise ValueError("places must be between 0 and {fracDigs}")
