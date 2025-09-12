@@ -14,11 +14,14 @@ package-dir = {"" = "src"}
 where = ["src"]
 
 [tool.pytest.ini_options]
-addopts = "-q -ra --strict-markers --strict-config --cov=src --cov-report=term-missing --cov-fail-under=50"
+addopts = "-q -ra --strict-markers --strict-config --cov=src --cov-report=lcov:lcov.info --cov-fail-under=50"
 testpaths = ["tests"]
 python_files = ["test*.py"]      # allow testTs.py
 filterwarnings = ["error::DeprecationWarning"]
 asyncio_mode = "auto"  # pytest-asyncio: no need to sprinkle @pytest.mark.asyncio
+
+[tool.coverage.report]
+show_missing = true
 
 [tool.coverage.run]
 branch = true

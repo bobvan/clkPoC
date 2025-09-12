@@ -1,13 +1,7 @@
-
-import sys
-import types
 import unittest
+
 from clkpoc.tsn import Tsn
 
-# tzlocal shim (to keep imports happy if tsn imports it indirectly)
-fake = types.ModuleType("tzlocal")
-fake.get_localzone_name = lambda: "UTC"
-sys.modules["tzlocal"] = fake
 
 class TestTsnArith(unittest.TestCase):
     def testIntMultiplyExact(self) -> None:

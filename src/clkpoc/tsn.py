@@ -1,8 +1,9 @@
 import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import ClassVar, Self
+from typing import ClassVar, Self, overload
 from zoneinfo import ZoneInfo  # Python 3.9+
+
 from tzlocal import get_localzone_name
 
 
@@ -64,7 +65,7 @@ class Tsn:
     def roundQuotientToEven(self, num: int, den: int) -> int:
         # Internal helper: compute round-to-even of num/den to an int.
         # Assumes den > 0. Works for negative numerators.
-        q, rem = divmod(num, den)
+        q, _rem = divmod(num, den)
         # Python's divmod with negative num returns q truncated toward -inf.
         # For ties-to-even, compare 2*|rem| with den.
         # Adjust remainder sign: rem has same sign as den (non-negative).
@@ -76,19 +77,42 @@ class Tsn:
             q += 1 if num >= 0 else -1
         return int(q)
 
+    @overload
+    def multiply(self: Self, factor: int) -> Self:
+        ...
+
+    @overload
+    def multiply(self: Self, factor: float) -> Self:
+        ...
+
     def multiply(self: Self, factor: int | float) -> Self:
         """Return a new Tsn scaled by factor.
         - If factor is int: exact scaling.
-        - If factor is float: compute exactly via as_integer_ratio and round to nearest picosecond (ties to even).
+        - If factor is float: compute exactly via as_integer_ratio and round to nearest
+          picosecond (ties to even).
         """
         if isinstance(factor, int):
             return type(self)(self.units * factor)
-        if isinstance(factor, float):
-            n, d = factor.as_integer_ratio()
-            # scale units by n/d with round-to-even
-            q = self.roundQuotientToEven(self.units * n, d)
-            return type(self)(q)
-        raise TypeError("factor must be int or float")
+        # Static type checking with pyright removes need for this runtime check
+        # And pyright complains that it's redunant
+        # if not isinstance(factor, float):
+        #     raise TypeError("factor must be int or float")
+        n, d = factor.as_integer_ratio()
+        # scale units by n/d with round-to-even
+        q = self.roundQuotientToEven(self.units * n, d)
+        return type(self)(q)
+
+    @overload
+    def divide(self: Self, value: int) -> Self:
+        ...
+
+    @overload
+    def divide(self: Self, value: float) -> Self:
+        ...
+
+    @overload
+    def divide(self: Self, value: Self) -> float:
+        ...
 
     def divide(self: Self, value: int | float | Self) -> Self | float:
         """Divide this Tsn.

@@ -1,15 +1,8 @@
 
-import sys
-import types
 import unittest
 from datetime import UTC, datetime
+
 from clkpoc.tsn import Tsn
-
-
-# Provide a lightweight tzlocal shim so importing tsn doesn't fail if tzlocal isn't installed here
-fake = types.ModuleType("tzlocal")
-fake.get_localzone_name = lambda: "UTC"
-sys.modules["tzlocal"] = fake
 
 
 class TestToIso8601(unittest.TestCase):

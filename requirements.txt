@@ -3,6 +3,7 @@ pyright==1.1.405
 pyserial-asyncio==0.6
 pytest-asyncio==1.1.0
 pytest-cov==6.3.0
+pytest-mock==3.15.0
 pyubx2==1.2.57
 ruff==0.12.12
 setuptools==66.1.1
