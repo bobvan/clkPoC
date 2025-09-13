@@ -7,11 +7,11 @@ from typing import Any
 
 import serial_asyncio as serialAsyncio
 
-from clkpoc.ts_types import TicTs
-from clkpoc.tsn import Tsn
 from clkpoc.quietWatch import QuietWatch
 from clkpoc.serialAsyncioShim import PausedReads, getSerialObj
 from clkpoc.topicPublisher import TopicPublisher
+from clkpoc.ts_types import TicTs
+from clkpoc.tsn import Tsn
 
 
 class TicState(Enum):
@@ -28,7 +28,7 @@ class TIC:
         self.port = port
         self.baud = baud
         self.ticState = TicState.startup
-        self.dog = QuietWatch(name=port, warnAfterSec=10)
+        self.dog = QuietWatch(name="TIC", warnAfterSec=10)
         self.pub = TopicPublisher("tic", warnIfSlowMs=5.0)
 
     def ppsPub(self, ticTs: TicTs, chan: str) -> None:
@@ -75,7 +75,7 @@ class TIC:
         # timestamping quickly.
         ticState = TicState.startup
 
-        dog = QuietWatch(name=self.port, warnAfterSec=10)
+        # Start watchdog for this TIC instance
         dogTask = asyncio.create_task(self.dog.run())
 
         try:
@@ -113,7 +113,7 @@ class TIC:
                     # XXX log stats here
                     # print("ignoring TIC line", line)
                     continue  # Ignore the line if it doesn't match a timestamp
-                dog.pet()
+                self.dog.pet()
                 capTs = Tsn.now()
                 integerStr, fracStr, chan = match.group('integerStr', 'fracStr', 'chan')
                 refTs = Tsn.fromStrs(integerStr, fracStr)

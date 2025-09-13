@@ -18,6 +18,7 @@ class F9T:
         self.eventBus = eventBus
         self.port = port
         self.baud = baud
+        self.dog = QuietWatch(name="F9T")
 
     async def ubxPrinter(self, msg: UBXMessage, raw: bytes) -> None:
         # Example: show message identity and iTOW if present
@@ -52,8 +53,7 @@ class F9T:
         reader, writer = await serialAsyncio.open_serial_connection(
             url=self.port, baudrate=self.baud
         )
-        dog = QuietWatch(name=self.port)
-        dogTask = asyncio.create_task(dog.run())
+        dogTask = asyncio.create_task(self.dog.run())
         buf = bytearray()
 
         try:
@@ -64,7 +64,7 @@ class F9T:
                         f"{self.port}: F9T serial closed or returned zero bytes"
                     )
                     break
-                dog.pet()
+                self.dog.pet()
                 buf.extend(chunk)
 
                 while True:
@@ -151,7 +151,7 @@ class F9T:
             # Allow cooperative cancellation
             pass
         finally:
-            dog.stop()
+            self.dog.stop()
             await dogTask
             try:
                 writer.close()

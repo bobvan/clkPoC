@@ -130,8 +130,10 @@ async def main():
             eventBus.task_done()
 
     dacQueue = asyncio.Queue()
-    f9t = F9T(eventBus, "/dev/ttyACM1", 9600)
-    tic = TIC(eventBus, "/dev/ttyACM0", 115200)
+    f9t = F9T(eventBus,
+        "/dev/serial/by-id/usb-u-blox_AG_-_www.u-blox.com_u-blox_GNSS_receiver-if00", 9600)
+    tic = TIC(eventBus,
+        "/dev/serial/by-id/usb-Arduino__www.arduino.cc__0042_95037323535351803130-if00", 115200)
     PpsCsvLog(tic, "ppsGnsOnRef", "ppsGns.csv")
     PpsCsvLog(tic, "ppsDscOnRef", "ppsDsc.csv")
     pairPps = PairPps(tic, "ppsGnsOnRef", "ppsDscOnRef")
