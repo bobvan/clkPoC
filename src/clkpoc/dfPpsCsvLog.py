@@ -1,4 +1,4 @@
-from clkpoc.clkTypes import TicTs
+from clkpoc.ts_types import TicTs
 from clkpoc.tic import TIC
 
 

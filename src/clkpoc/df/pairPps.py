@@ -1,6 +1,7 @@
 import copy
 
-from clkpoc.clkTypes import PairTs, TicTs, Ts
+from clkpoc.ts_types import PairTs, TicTs
+from clkpoc.tsn import Tsn
 from clkpoc.tic import TIC
 from clkpoc.topicPublisher import TopicPublisher
 
@@ -20,12 +21,11 @@ class PairPps:
         tic.pub.sub(gnsTopic, self.gnsCb)
         tic.pub.sub(dscTopic, self.dscCb)
 
-    def pubIfPair(self, capDelta: Ts) -> None:
+    def pubIfPair(self, capDelta: Tsn) -> None:
 #        print(f"PairPps capDelta {capDelta}")
-        # XXX this should be call back into Ts so representaion is hidden
-        # XXX for now, -0.5 is represented as -1 sec + 500000000000 frac
-        totalPS = capDelta.secs*Ts.fracUnitsPerSecond + capDelta.frac
-        if abs(totalPS) >= 500000000000:
+        # publish only if capture timestamps are within 0.5 seconds
+        half_sec_units = Tsn.unitsPerSecond // 2
+        if abs(capDelta.units) >= half_sec_units:
             return
         if self.gnsTs is None or self.dscTs is None:
             return  # Additional safety check for Pyright
@@ -37,14 +37,12 @@ class PairPps:
         self.gnsTs = copy.deepcopy(gnsTs)
         if self.dscTs is None:
             return
-        capDelta = gnsTs.capTs
-        capDelta.subFrom(self.dscTs.capTs)
+        capDelta = gnsTs.capTs.sub(self.dscTs.capTs)
         self.pubIfPair(capDelta)
 
     def dscCb(self, dscTs: TicTs):
         self.dscTs = copy.deepcopy(dscTs)
         if self.gnsTs is None:
             return
-        capDelta = dscTs.capTs
-        capDelta.subFrom(self.gnsTs.capTs)
+        capDelta = dscTs.capTs.sub(self.gnsTs.capTs)
         self.pubIfPair(capDelta)

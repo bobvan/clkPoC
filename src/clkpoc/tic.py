@@ -7,7 +7,8 @@ from typing import Any
 
 import serial_asyncio as serialAsyncio
 
-from clkpoc.clkTypes import TicTs, Ts
+from clkpoc.ts_types import TicTs
+from clkpoc.tsn import Tsn
 from clkpoc.quietWatch import QuietWatch
 from clkpoc.serialAsyncioShim import PausedReads, getSerialObj
 from clkpoc.topicPublisher import TopicPublisher
@@ -113,9 +114,9 @@ class TIC:
                     # print("ignoring TIC line", line)
                     continue  # Ignore the line if it doesn't match a timestamp
                 dog.pet()
-                capTs = Ts.now()
+                capTs = Tsn.now()
                 integerStr, fracStr, chan = match.group('integerStr', 'fracStr', 'chan')
-                refTs = Ts.fromStr(integerStr, fracStr)
+                refTs = Tsn.fromStrs(integerStr, fracStr)
                 ticTs = TicTs(refTs=refTs, capTs=capTs)
                 print("got TIC data", ticTs)
                 self.ppsPub(ticTs, chan)

@@ -36,11 +36,11 @@ class Tsn:
 
     @classmethod
     def fromStrs(cls: type[Self], integerStr: str, fracStr: str) -> Self:
-        # Construct Ts from separate integer and fractional strings
+        # Construct Tsn from separate integer and fractional strings
         intPart = int(integerStr)
         sigDigs = fracStr[:cls.fracDigs]
-        fracPart = int(sigDigs) * 10**(cls.fracDigs-len(sigDigs))
-        return intPart*cls.unitsPerSecond + fracPart
+        fracPart = int(sigDigs) * 10 ** (cls.fracDigs - len(sigDigs))
+        return cls(intPart * cls.unitsPerSecond + fracPart)
 
     @classmethod
     def now(cls: type[Self]) -> Self:
@@ -261,4 +261,4 @@ class Tsn:
 
     def __repr__(self) -> str:
         # unambiguous developer form (great for logs with %r)
-        return f"Ts(units={self.units})"
+        return f"Tsn(units={self.units})"

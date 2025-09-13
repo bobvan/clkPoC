@@ -43,7 +43,7 @@ def test_from_strs(frac_digs: int, units_per_second: int):
     sig_digs = frac_str[:frac_digs]
     frac_part = int(sig_digs) * 10**(frac_digs - len(sig_digs))
     expected_units = int_part * units_per_second + frac_part
-    assert tsn == expected_units
+    assert tsn.units == expected_units
 
 def test_now(frac_digs: int, units_per_second: int):
     tsn = Tsn.now()
