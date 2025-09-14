@@ -1,9 +1,9 @@
 import copy
 
-from clkpoc.ts_types import PairTs, TicTs
-from clkpoc.tsn import Tsn
 from clkpoc.tic import TIC
 from clkpoc.topicPublisher import TopicPublisher
+from clkpoc.ts_types import PairTs, TicTs
+from clkpoc.tsn import Tsn
 
 
 # Subscribe to two PPS topics and publish when a pair has capture
@@ -26,7 +26,7 @@ class PairPps:
         # publish only if capture timestamps are within 0.5 seconds
         half_sec_units = Tsn.unitsPerSecond // 2
         if abs(capDelta.units) >= half_sec_units:
-            print(f"PairPps: Waiting for Ts pair")
+            print("PairPps: Waiting for closeby Ts pair")
             return
         if self.gnsTs is None or self.dscTs is None:
             return  # Additional safety check for Pyright
@@ -34,7 +34,7 @@ class PairPps:
         self.pub.publish("pairPps", pair)
 #        print(f"PairPps: {pair}")
         tsDelta = pair.gnsTs.refTs.sub(pair.dscTs.refTs)
-        print(f"PairPps: capDelta {capDelta}, tsDelta {tsDelta}")
+        print(f"PairPps: capDelta {capDelta.elapsedStr()}, tsDelta {tsDelta.elapsedStr()}")
 
     def gnsCb(self, gnsTs: TicTs):
         self.gnsTs = copy.deepcopy(gnsTs)

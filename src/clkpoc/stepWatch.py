@@ -1,8 +1,9 @@
 import logging
 
+from clkpoc.armTadd import ArmTadd
+from clkpoc.df.pairPps import PairPps
 from clkpoc.ts_types import PairTs
 from clkpoc.tsn import Tsn
-from clkpoc.df.pairPps import PairPps
 
 
 class StepWatch:
@@ -14,7 +15,7 @@ class StepWatch:
     This should only happen once per boot, so log a warning if it happends more than once.
     """
 
-    def __init__(self, pairPps: PairPps, thresholdSec: float = 1e-6):
+    def __init__(self, pairPps: PairPps, thresholdSec: float = 1e-6) -> None:
         """
         pairPps: the PairPps instance to subscribe to.
         thresholdSec: absolute delta threshold in seconds for detection.
@@ -25,6 +26,7 @@ class StepWatch:
         # Subscribe to the PairPps publisher for paired PPS events
         pairPps.pub.sub("pairPps", self._on_pair)
         self.haveStepped = False
+        self.armTadd = ArmTadd()
 
     def _on_pair(self, pair: PairTs) -> None:
         # Compute delta between reference timestamps
@@ -33,14 +35,16 @@ class StepWatch:
         if abs(delta.units) >= self.threshold.units:
             if self.haveStepped:
                 logging.warning(
-                    "StepWatch: refTs delta exceeded again. step: |%s| >= %s (gns=%s dsc=%s)",
+                    "StepWatch: GNSS PPS - Dsc PPS delta exceeded again. "
+                    "step: |%s| >= %s (gns=%s dsc=%s)",
                     delta,
                     self.threshold,
                     pair.gnsTs.refTs,
                     pair.dscTs.refTs,
                 )
             # Pulse ARM pin on TADD-2 Mini via GPIO to trigger step in dscTs phase
-            print("would pulse ARM pin now")
+            print("StepWatch: GNSS PPS - Dsc PPS delta exceeded. Stepping dscTs phase.")
+            self.armTadd.pulse()
             self.haveStepped = True
 
 

@@ -6,14 +6,15 @@ import time
 from enum import Enum
 
 from clkpoc.df.pairPps import PairPps
-from clkpoc.stepWatch import StepWatch
 from clkpoc.dfPpsCsvLog import PpsCsvLog
 from clkpoc.f9t import F9T
+from clkpoc.stepWatch import StepWatch
 from clkpoc.tic import TIC
 
 # third party imports (install as needed)
 # import aiosqlite
 
+# XXX next up: Figure out why armTadd doesn't seem to be pulsing GPIO
 # XXX next up: Implement class to pulse TADD ARM pin via GPIO and integrate with StepWatch
 # XXX next up: Initialize F9T to output TIM-TP messages and other required state
 # XXX next up: Define mapping of chA/B to PPS signals
