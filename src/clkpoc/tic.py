@@ -29,7 +29,7 @@ class TIC:
         self.baud = baud
         self.ticState = TicState.startup
         self.dog = QuietWatch(name="TIC", warnAfterSec=10)
-        self.pub = TopicPublisher("tic", warnIfSlowMs=5.0)
+        self.pub = TopicPublisher("tic", warnIfSlowMs=15.0)
 
     def ppsPub(self, ticTs: TicTs, chan: str) -> None:
         if   chan == 'A':
@@ -56,6 +56,7 @@ class TIC:
             attrs = termios.tcgetattr(fd)
             cflag = attrs[2]
             if not cflag & termios.HUPCL:
+                print("TIC: re-opening TIC serial port with HUPCL")
                 # HUPCL was not set, so set it now and re-open the serial port
                 cflag |= termios.HUPCL
                 attrs[2] = cflag
@@ -89,13 +90,16 @@ class TIC:
                 and re.fullmatch(r"# Type any character for config menu", line)):
                     writer.write(b'x')
                     ticState = TicState.config1
+                    print("TIC: starting config sequence")
                 if re.fullmatch(r"choose one:", line):
                     if ticState==TicState.config1:
                         writer.write(b'r')
                         ticState = TicState.config2
+                        print("TIC: resetting to defaults")
                     elif ticState==TicState.config2:
                         writer.write(b'w')
                         ticState = TicState.stamping
+                        print("TIC: saving config and starting timestamping")
                 if ticState!=TicState.stamping:
                     continue
 
@@ -118,7 +122,7 @@ class TIC:
                 integerStr, fracStr, chan = match.group('integerStr', 'fracStr', 'chan')
                 refTs = Tsn.fromStrs(integerStr, fracStr)
                 ticTs = TicTs(refTs=refTs, capTs=capTs)
-                print("got TIC data", ticTs)
+#                print("got TIC data", ticTs)
                 self.ppsPub(ticTs, chan)
                 # sample = {"ppsErrorNs": 123}  # placeholder
                 # await eventBus.put(Event(nowNs(), "tic", "ppsSample", sample))

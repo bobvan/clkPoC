@@ -26,16 +26,20 @@ class PairPps:
         # publish only if capture timestamps are within 0.5 seconds
         half_sec_units = Tsn.unitsPerSecond // 2
         if abs(capDelta.units) >= half_sec_units:
+            print(f"PairPps: Waiting for Ts pair")
             return
         if self.gnsTs is None or self.dscTs is None:
             return  # Additional safety check for Pyright
         pair = PairTs(gnsTs=self.gnsTs, dscTs=self.dscTs)
         self.pub.publish("pairPps", pair)
-        print(f"PairPps: {pair}")
+#        print(f"PairPps: {pair}")
+        tsDelta = pair.gnsTs.refTs.sub(pair.dscTs.refTs)
+        print(f"PairPps: capDelta {capDelta}, tsDelta {tsDelta}")
 
     def gnsCb(self, gnsTs: TicTs):
         self.gnsTs = copy.deepcopy(gnsTs)
         if self.dscTs is None:
+            print("PairPps: Waiting for first dscTs")
             return
         capDelta = gnsTs.capTs.sub(self.dscTs.capTs)
         self.pubIfPair(capDelta)
@@ -43,6 +47,7 @@ class PairPps:
     def dscCb(self, dscTs: TicTs):
         self.dscTs = copy.deepcopy(dscTs)
         if self.gnsTs is None:
+            print("PairPps: Waiting for first gns:Ts")
             return
         capDelta = dscTs.capTs.sub(self.gnsTs.capTs)
         self.pubIfPair(capDelta)

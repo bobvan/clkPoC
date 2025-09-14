@@ -6,6 +6,7 @@ import time
 from enum import Enum
 
 from clkpoc.df.pairPps import PairPps
+from clkpoc.stepWatch import StepWatch
 from clkpoc.dfPpsCsvLog import PpsCsvLog
 from clkpoc.f9t import F9T
 from clkpoc.tic import TIC
@@ -13,9 +14,7 @@ from clkpoc.tic import TIC
 # third party imports (install as needed)
 # import aiosqlite
 
-# XXX next up: Create a new file with EventStream class and import it here
-# XXX next up: Add EventStream subscription to F9T and TIC classes
-# XXX next up: Implement pairPps task that subscirbes to Ts events and publishes when there's a pair
+# XXX next up: Implement class to pulse TADD ARM pin via GPIO and integrate with StepWatch
 # XXX next up: Initialize F9T to output TIM-TP messages and other required state
 # XXX next up: Define mapping of chA/B to PPS signals
 # XXX next up: Define IPC messages for TIM-TP message and TIC timestamps with host time
@@ -137,6 +136,8 @@ async def main():
     PpsCsvLog(tic, "ppsGnsOnRef", "ppsGns.csv")
     PpsCsvLog(tic, "ppsDscOnRef", "ppsDsc.csv")
     pairPps = PairPps(tic, "ppsGnsOnRef", "ppsDscOnRef")
+    # Watch for step changes between GNSS and disciplined ref timestamps
+    StepWatch(pairPps)  # use default threshold; adjust as needed
     tasks = [
         asyncio.create_task(f9t.run()),
         asyncio.create_task(tic.run()),
@@ -146,6 +147,7 @@ async def main():
         asyncio.create_task(ipcServer(reg, dacQueue)),
         asyncio.create_task(tee()),
     ]
+    print("main: All async tasks started")
     try:
         await asyncio.gather(*tasks)
     except asyncio.CancelledError:
