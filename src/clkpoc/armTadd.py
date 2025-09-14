@@ -1,53 +1,146 @@
 """
-Control ARM pin on TADD-2 Mini for Raspberry Pi CM5.
+Control ARM pin on TADD-2 Mini for Raspberry Pi CM5 using libgpiod.
 
 Provides a small helper to initialize BCM GPIO 16 as an output and
-issue a 1 ms active-low pulse to trigger the TADD ARM input.
+issue an active-low pulse to trigger the TADD ARM input.
 
-This module tries to import RPi.GPIO. If unavailable (e.g. on non-Pi
-development hosts), a minimal in-process mock is used so that code can
-be imported and exercised without hardware.
+This module prefers Python bindings for libgpiod (``import gpiod``) which is
+the recommended GPIO interface on Raspberry Pi OS Bookworm and newer. If the
+``gpiod`` module is unavailable (e.g. on non-Pi development hosts), a minimal
+in-process mock is used so that code can be imported and exercised without
+hardware.
 """
 
 from __future__ import annotations
 
 import logging
+import contextlib
+import glob
+import os
 import time
 
-try:  # Prefer real GPIO on Raspberry Pi
-    import RPi.GPIO as _GPIO  # type: ignore
+try:  # Prefer libgpiod on Raspberry Pi
+    import gpiod as _GPIOD  # type: ignore
 except Exception:  # Fallback to a minimal mock for non-Pi environments
-    class _MockGPIO:  # pragma: no cover - trivial behavior
-        BCM = 11
-        OUT = 0
-        HIGH = 1
-        LOW = 0
+    _GPIOD = None  # type: ignore
 
-        def __init__(self) -> None:
-            self._mode: int | None = None
-            self._state: dict[int, int] = {}
-            self._warnings = True
 
-        def setmode(self, mode: int) -> None:
-            self._mode = mode
+class _GpioLine:
+    """Thin wrapper over libgpiod v1/v2 to drive a single output line.
 
-        def getmode(self) -> int | None:
-            return self._mode
+    If ``gpiod`` is unavailable, falls back to an in-process mock.
+    """
 
-        def setwarnings(self, flag: bool) -> None:
-            self._warnings = flag
+    def __init__(self, offset: int, *, consumer: str = "ArmTadd") -> None:
+        self._offset = offset
+        self._consumer = consumer
+        self._mode = "mock"
+        self._req = None
+        self._chip = None
+        self._line = None
+        self._state = 1  # track last value for mock
 
-        def setup(self, pin: int, mode: int, *, initial: int | None = None) -> None:
-            if initial is not None:
-                self._state[pin] = initial
+        if _GPIOD is None:
+            logging.info("ArmTadd: using Mock GPIO (gpiod not available)")
+            return
+
+        try:
+            # Detect libgpiod v2 (has request_lines) vs v1
+            if hasattr(_GPIOD, "request_lines"):
+                # v2 API — try all gpiochips until one accepts the offset
+                self._mode = "v2"
+                settings = _GPIOD.LineSettings(
+                    direction=_GPIOD.line.Direction.OUTPUT,
+                    output_value=_GPIOD.line.Value.ACTIVE,  # start HIGH
+                )
+                last_err: Exception | None = None
+                for chip_path in sorted(glob.glob("/dev/gpiochip*")):
+                    try:
+                        req = _GPIOD.request_lines(
+                            chip_path,
+                            consumer=consumer,
+                            config={offset: settings},
+                        )
+                        self._req = req
+                        self._state = 1
+                        logging.info("ArmTadd: using %s for GPIO%d", chip_path, offset)
+                        break
+                    except Exception as e:  # try next chip
+                        last_err = e
+                        continue
+                if self._req is None:
+                    raise RuntimeError(str(last_err or "no gpiochip accepted offset"))
             else:
-                self._state.setdefault(pin, self.LOW)
+                # v1 API — try all gpiochips and request if offset is in range
+                self._mode = "v1"
+                last_err: Exception | None = None
+                for chip_dev in sorted(glob.glob("/dev/gpiochip*")):
+                    try:
+                        chip = _GPIOD.Chip(chip_dev)
+                        try:
+                            if hasattr(chip, "num_lines"):
+                                num = chip.num_lines()
+                                if offset >= num:
+                                    chip.close()
+                                    continue
+                            line = chip.get_line(offset)
+                            line.request(
+                                consumer=consumer,
+                                type=_GPIOD.LINE_REQ_DIR_OUT,
+                                default_val=1,
+                            )
+                            self._chip = chip
+                            self._line = line
+                            self._state = 1
+                            logging.info("ArmTadd: using %s for GPIO%d", chip_dev, offset)
+                            break
+                        except Exception as e:
+                            last_err = e
+                            with contextlib.suppress(Exception):
+                                chip.close()
+                            continue
+                    except Exception as e:
+                        last_err = e
+                        continue
+                if self._line is None:
+                    raise RuntimeError(str(last_err or "no gpiochip accepted offset"))
+        except Exception as e:  # pragma: no cover - hardware/env dependent
+            logging.warning("ArmTadd: failed to init gpiod, using mock: %s", e)
+            self._mode = "mock"
 
-        def output(self, pin: int, value: int) -> None:
-            self._state[pin] = value
-            logging.debug("MockGPIO: pin %s -> %s", pin, value)
+    def set_value(self, val: int) -> None:
+        self._state = 1 if val else 0
+        if self._mode == "v2":  # pragma: no cover - hardware/env dependent
+            try:
+                self._req.set_value(
+                    self._offset,
+                    _GPIOD.line.Value.ACTIVE if val else _GPIOD.line.Value.INACTIVE,
+                )
+            except Exception as e:
+                logging.warning("ArmTadd: gpiod v2 set_value failed: %s", e)
+        elif self._mode == "v1":  # pragma: no cover - hardware/env dependent
+            try:
+                self._line.set_value(val)
+            except Exception as e:
+                logging.warning("ArmTadd: gpiod v1 set_value failed: %s", e)
+        else:
+            logging.debug("MockGPIO: line %s -> %s", self._offset, val)
 
-    _GPIO = _MockGPIO()  # type: ignore
+    def close(self) -> None:
+        if self._mode == "v2":  # pragma: no cover - hardware/env dependent
+            with contextlib.suppress(Exception):
+                self._req.release()  # type: ignore[attr-defined]
+        elif self._mode == "v1":  # pragma: no cover - hardware/env dependent
+            with contextlib.suppress(Exception):
+                self._line.release()
+            with contextlib.suppress(Exception):
+                self._chip.close()
+
+    def __del__(self):  # pragma: no cover - best-effort cleanup
+        try:
+            self.close()
+        except Exception:
+            pass
 
 
 class ArmTadd:
@@ -58,36 +151,14 @@ class ArmTadd:
     - `pulse()`: drives GPIO 16 LOW for 1 ms, then returns it to HIGH.
     """
 
-    _PIN: int = 16  # BCM numbering
+    _PIN: int = 16  # BCM numbering (line offset on gpiochip0)
 
     def __init__(self) -> None:
-        # Configure GPIO library and pin direction/state
-        gpio = _GPIO
-        try:
-            # Silence warnings about reusing channels
-            gpio.setwarnings(False)  # type: ignore[attr-defined]
-        except Exception:
-            pass
-
-        # Ensure BCM numbering is used, unless already set differently (error).
-        try:
-            mode = gpio.getmode()  # type: ignore[attr-defined]
-        except Exception:
-            mode = None
-        if mode is None:
-            gpio.setmode(gpio.BCM)  # type: ignore[attr-defined]
-        elif mode != gpio.BCM:  # type: ignore[attr-defined]
-            raise RuntimeError("GPIO mode already set to non-BCM; expected BCM numbering")
-
-        # Initialize pin as an output and drive logic high (inactive)
-        gpio.setup(self._PIN, gpio.OUT, initial=gpio.HIGH)  # type: ignore[attr-defined]
-
-        self._gpio = gpio
+        # Initialize GPIO line as an output and drive logic high (inactive)
+        self._line = _GpioLine(self._PIN)
 
     def pulse(self) -> None:
-        """Drive GPIO 16 LOW for 1 ms, then back to HIGH."""
-        print("ArmTadd: resetting")
-        self._gpio.output(self._PIN, self._gpio.LOW)
-        time.sleep(0.010)
-        self._gpio.output(self._PIN, self._gpio.HIGH)
-
+        """Drive GPIO 16 LOW briefly, then back to HIGH."""
+        self._line.set_value(0)
+        time.sleep(0.110)
+        self._line.set_value(1)
