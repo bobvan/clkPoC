@@ -1,6 +1,7 @@
 
 from clkpoc.df.pairPps import PairPps
 from clkpoc.dsc import Dsc
+from clkpoc.rollingMean import RollingMean
 from clkpoc.state import State
 from clkpoc.tsTypes import PairTs
 
@@ -22,12 +23,13 @@ class PhaseTrack:
         self.dsc = Dsc()
         self.state.dacVal = self.dsc.readDac()
         self.kp = 0.0000000001
-        self.ki = -0.0000002
+        self.ki = -0.0000001
         #self.ki = 0.0
         self.integ = 0.0
         self.lastAdj = 0.0
         self.pairCnt = 0
         self.lastPair: PairTs | None = None
+        self.ffeRm15 = RollingMean(15)  # rolling mean of fractional freq error in ppm
 
     def onPairPps(self, pair: PairTs) -> None:
         # XXX might be better to compute ma5(dscDev) to smooth DAC value changes
@@ -42,10 +44,12 @@ class PhaseTrack:
             gnsTi = self.lastPair.gnsTs.refTs.subFrom(pair.gnsTs.refTs).toUnits()
             dscTi = self.lastPair.dscTs.refTs.subFrom(pair.dscTs.refTs).toUnits()
 #            print(f"PhaseTrack: gnsTi {gnsTi} dscTi {dscTi} ")
+            # Get fractional frequency error in parts per billion
             ffePpb = 1e9*(dscTi-gnsTi)/gnsTi
-            print(f"PhaseTrack: ffePpm {ffePpb:8.3f} ", end="")
+            ffePpbRm15 = self.ffeRm15.add(ffePpb)
+            print(f"PhaseTrack: ffePpmRm15 {ffePpbRm15:8.3f} ", end="")
         else:
-            print("PhaseTrack: ffePpm   n/a ", end="")
+            print("PhaseTrack: ffePpm      n/a ", end="")
         self.lastPair = pair
 
         # simple PI loop (replace with your preferred filter)
@@ -57,4 +61,5 @@ class PhaseTrack:
         if newVal != self.state.dacVal:
             self.state.dacVal = newVal
             self.dsc.writeDac(newVal)
-        print(f"pairCnt {self.pairCnt:3d}, dscDev {dscDev.elapsedStr()}, adj {adjVal:.1f}, accel {accel:.1f}, newVal {newVal}")
+        print(f"pairCnt {self.pairCnt:3d}, dscDev {dscDev.elapsedStr()}, "
+              f"adj {adjVal:.1f}, accel {accel:.2f}, newVal {newVal}")

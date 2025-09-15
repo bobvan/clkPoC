@@ -12,7 +12,7 @@ class Dsc:
         self.bus = SMBus(busNum)
         self.gain = gain
         self.writeControl(self.gain)
-        self.writeDac(15000)  # mid-scale on startup
+        self.writeDac(13200)  # mid-scale on startup
 
     @unique
     class CommandBytes(IntEnum):
