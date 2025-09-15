@@ -2,8 +2,7 @@ import logging
 
 from clkpoc.df.pairPps import PairPps
 from clkpoc.phaseStep import PhaseStep
-from clkpoc.ts_types import PairTs
-from clkpoc.tsn import Tsn
+from clkpoc.tsn import PairTs, Tsn
 
 
 class PhaseWatch:

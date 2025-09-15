@@ -14,9 +14,6 @@ from clkpoc.tic import TIC
 # third party imports (install as needed)
 # import aiosqlite
 
-# XXX next up: Add types from ts_types.py to tsn.py
-# XXX next up: Move ts_types.py to aux/
-
 # XXX next up: Rename Tsn to Ts
 # XXX next up: Rename tests from Tsn to Ts
 # XXX next up: Rename tsn.py to tsTypes.py

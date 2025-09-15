@@ -2,8 +2,7 @@ import copy
 
 from clkpoc.tic import TIC
 from clkpoc.topicPublisher import TopicPublisher
-from clkpoc.ts_types import PairTs, TicTs
-from clkpoc.tsn import Tsn
+from clkpoc.tsn import PairTs, TicTs, Tsn
 
 
 # Subscribe to two PPS topics and publish when a pair has capture

@@ -262,3 +262,21 @@ class Tsn:
     def __repr__(self) -> str:
         # unambiguous developer form (great for logs with %r)
         return f"Tsn(units={self.units})"
+
+@dataclass(frozen=True)
+class TicTs:
+    refTs: Tsn  # Event timestamp on TIC's reference clock
+    capTs: Tsn  # Event timestamp capture time on host clock
+
+    def __str__(self) -> str:
+        return f"cap {self.capTs:L} tic {self.refTs:E}"
+
+
+# Paired up timestamps from GNSS PPS and disciplined oscillator PPS for same UTC second
+@dataclass(frozen=True)
+class PairTs:
+    gnsTs: TicTs
+    dscTs: TicTs
+
+    def __str__(self) -> str:
+        return f"gns {self.gnsTs} dsc {self.dscTs}"

@@ -10,8 +10,7 @@ import serial_asyncio as serialAsyncio
 from clkpoc.quietWatch import QuietWatch
 from clkpoc.serialAsyncioShim import PausedReads, getSerialObj
 from clkpoc.topicPublisher import TopicPublisher
-from clkpoc.ts_types import TicTs
-from clkpoc.tsn import Tsn
+from clkpoc.tsn import TicTs, Tsn
 
 
 class TicState(Enum):
