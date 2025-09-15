@@ -1,6 +1,6 @@
-from typing import List, Tuple
 
-def fitKv(dacCodes: List[int], freqErrorPpb: List[float], f0Hz: float) -> Tuple[float, float, float]:
+def fitKv(dacCodes: list[int], freqErrorPpb: list[float],
+        f0Hz: float) -> tuple[float, float, float]:
     """
     Returns (kvHzPerLsb, slopePpbPerCode, interceptPpb).
     kvHzPerLsb = f0Hz * slopePpbPerCode * 1e-9
@@ -14,7 +14,7 @@ def fitKv(dacCodes: List[int], freqErrorPpb: List[float], f0Hz: float) -> Tuple[
 
     sxx = 0.0
     sxy = 0.0
-    for x, y in zip(dacCodes, freqErrorPpb):
+    for x, y in zip(dacCodes, freqErrorPpb, strict=False):
         dx = float(x) - xMean
         dy = y - yMean
         sxx += dx * dx

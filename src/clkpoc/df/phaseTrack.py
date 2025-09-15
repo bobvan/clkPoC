@@ -22,14 +22,64 @@ class PhaseTrack:
         self.state = state
         self.dsc = Dsc()
         self.state.dacVal = self.dsc.readDac()
+        self.lastVal = self.state.dacVal
         self.kp = 0.0000000001
         self.ki = -0.0000001
         #self.ki = 0.0
         self.integ = 0.0
-        self.lastAdj = 0.0
+        self.lastAdj = 0.0 # XXX should be lastAdjVal
         self.pairCnt = 0
         self.lastPair: PairTs | None = None
         self.ffeRm15 = RollingMean(15)  # rolling mean of fractional freq error in ppm
+        self.pllPi = self.PllPi(hzPerLsb = -4.2034700315e-05,
+            codeMin=11400, codeMax=15000, codeInit=self.state.dacVal)
+
+
+    class PllPi:
+        def __init__(self, hzPerLsb: float, codeMin: int, codeMax: int, codeInit: int) -> None:
+            self.kpHz: float = 0.4398230
+            self.kiHz: float = 0.0986960
+            self.ts: float = 1.0  # 1 PPS
+            self.hzPerLsb: float = hzPerLsb  # negative in your case
+            self.codeMin: int = codeMin
+            self.codeMax: int = codeMax
+            self.code: int = codeInit
+            self.prevErr: float | None = None
+            self.uHz: float = 0.0  # current frequency correction
+
+        def step(self, errSec: float) -> int:
+            # wrap phase error to (-0.5, 0.5]
+            while errSec <= -0.5:
+                errSec += 1.0
+            while errSec > 0.5:
+                errSec -= 1.0
+
+            if self.prevErr is None:
+                self.prevErr = errSec
+
+            deltaErr = errSec - self.prevErr
+            # velocity PI in Hz
+            self.uHz = self.uHz + self.kpHz * deltaErr + self.kiHz * self.ts * errSec
+            print("One: ", self.kpHz * deltaErr)
+            print("Two: ", self.kiHz * self.ts * errSec)
+            print("Three: ", self.uHz + self.kpHz * deltaErr + self.kiHz * self.ts * errSec)
+            print(f"  PllPi: err {errSec:.3e} kpHz {self.kpHz} deltaErr {deltaErr:.3e} uHz {self.uHz:6e}")
+
+            # convert frequency correction to DAC increment (handles sign via hzPerLsb)
+            deltaCode = int(round(self.uHz / self.hzPerLsb))
+            newCode = self.code + deltaCode
+
+            # clamp and simple anti-windup: if clamped, keep uHz consistent with code
+            if newCode < self.codeMin:
+                newCode = self.codeMin
+                self.uHz = (newCode - self.code) * self.hzPerLsb
+            elif newCode > self.codeMax:
+                newCode = self.codeMax
+                self.uHz = (newCode - self.code) * self.hzPerLsb
+
+            self.code = newCode
+            self.prevErr = errSec
+            return self.code
 
     def onPairPps(self, pair: PairTs) -> None:
         # XXX might be better to compute ma5(dscDev) to smooth DAC value changes
@@ -52,14 +102,19 @@ class PhaseTrack:
             print("PhaseTrack: ffePpm      n/a ", end="")
         self.lastPair = pair
 
-        # simple PI loop (replace with your preferred filter)
-        self.integ += dscDev.toPicoseconds()
-        adjVal = self.kp * dscDev.toPicoseconds() + self.ki * self.integ
-        accel = self.lastAdj - adjVal
+        newVal = self.pllPi.step(dscDev.toPicoseconds() * 1e-12)
+        adjVal = self.lastVal - newVal
+        accel = adjVal - self.lastAdj
         self.lastAdj = adjVal
-        newVal = max(0, min(65535, int(self.state.dacVal - adjVal)))
-        if newVal != self.state.dacVal:
-            self.state.dacVal = newVal
-            self.dsc.writeDac(newVal)
+        # simple PI loop (replace with your preferred filter)
+        #self.integ += dscDev.toPicoseconds()
+        #adjVal = self.kp * dscDev.toPicoseconds() + self.ki * self.integ
+        #accel = self.lastAdj - adjVal
+        #self.lastAdj = adjVal
+        #newVal = max(0, min(65535, int(self.state.dacVal - adjVal)))
+        #if newVal != self.state.dacVal:
+        #    self.state.dacVal = newVal
+        #    self.dsc.writeDac(newVal)
+
         print(f"pairCnt {self.pairCnt:3d}, dscDev {dscDev.elapsedStr()}, "
               f"adj {adjVal:.1f}, accel {accel:.2f}, newVal {newVal}")
