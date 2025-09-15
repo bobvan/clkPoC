@@ -1,7 +1,7 @@
 import logging
 
-from clkpoc.armTadd import ArmTadd
 from clkpoc.df.pairPps import PairPps
+from clkpoc.phaseStep import PhaseStep
 from clkpoc.ts_types import PairTs
 from clkpoc.tsn import Tsn
 
@@ -11,7 +11,7 @@ class StepWatch:
     Subscribe to PairPps 'pairPps' topic and watch for
     the difference between GNSS and disciplined PPS reference
     timestamps to exceed a configurable threshold. If the threshold is exceeded,
-    pulse the ARM pin on the TADD-2 Mini via GPIO to trigger a step in the dscTs phase.
+    start a PhaseStep task to step the TADD-2 Mini's phase into coarse alignment with GNSS.
     This should only happen once per boot, so log a warning if it happends more than once.
     """
 
@@ -26,13 +26,16 @@ class StepWatch:
         # Subscribe to the PairPps publisher for paired PPS events
         pairPps.pub.sub("pairPps", self._on_pair)
         self.haveStepped = False
-        self.armTadd = ArmTadd()
+        self.phaseStep = None
 
     def _on_pair(self, pair: PairTs) -> None:
         # Compute delta between reference timestamps
         # XXX might be better to compute ma5(delta) to avoid false positives
         delta = pair.gnsTs.refTs.sub(pair.dscTs.refTs)
         if abs(delta.units) >= self.threshold.units:
+            if self.phaseStep is not None and self.phaseStep.is_running():
+                # A PhaseStep task is already running; do nothing more for now
+                return
             if self.haveStepped:
                 logging.warning(
                     "StepWatch: GNSS PPS - Dsc PPS delta exceeded again. "
@@ -44,7 +47,5 @@ class StepWatch:
                 )
             # Pulse ARM pin on TADD-2 Mini via GPIO to trigger step in dscTs phase
             print("StepWatch: GNSS PPS - Dsc PPS delta exceeded. Stepping dscTs phase.")
-            self.armTadd.pulse()
+            self.phaseStep = PhaseStep() # Start background phase stepper if not already running
             self.haveStepped = True
-
-

@@ -26,7 +26,7 @@ class PairPps:
         # publish only if capture timestamps are within 0.5 seconds
         half_sec_units = Tsn.unitsPerSecond // 2
         if abs(capDelta.units) >= half_sec_units:
-            print("PairPps: Waiting for closeby Ts pair")
+#            print("PairPps: Waiting for closeby Ts pair")
             return
         if self.gnsTs is None or self.dscTs is None:
             return  # Additional safety check for Pyright

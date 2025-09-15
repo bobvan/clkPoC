@@ -13,11 +13,12 @@ hardware.
 
 from __future__ import annotations
 
-import logging
 import contextlib
 import glob
-import os
+import logging
 import time
+from types import TracebackType
+from typing import Any, ClassVar
 
 try:  # Prefer libgpiod on Raspberry Pi
     import gpiod as _GPIOD  # type: ignore
@@ -31,17 +32,17 @@ class _GpioLine:
     If ``gpiod`` is unavailable, falls back to an in-process mock.
     """
 
-    def __init__(self, offset: int, *, consumer: str = "ArmTadd") -> None:
+    def __init__(self, offset: int, *, consumer: str = "TADD") -> None:
         self._offset = offset
         self._consumer = consumer
         self._mode = "mock"
-        self._req = None
-        self._chip = None
-        self._line = None
+        self._req: Any | None = None
+        self._chip: Any | None = None
+        self._line: Any | None = None
         self._state = 1  # track last value for mock
 
         if _GPIOD is None:
-            logging.info("ArmTadd: using Mock GPIO (gpiod not available)")
+            logging.info("TADD: using Mock GPIO (gpiod not available)")
             return
 
         try:
@@ -49,6 +50,7 @@ class _GpioLine:
             if hasattr(_GPIOD, "request_lines"):
                 # v2 API — try all gpiochips until one accepts the offset
                 self._mode = "v2"
+                assert _GPIOD is not None
                 settings = _GPIOD.LineSettings(
                     direction=_GPIOD.line.Direction.OUTPUT,
                     output_value=_GPIOD.line.Value.ACTIVE,  # start HIGH
@@ -63,7 +65,7 @@ class _GpioLine:
                         )
                         self._req = req
                         self._state = 1
-                        logging.info("ArmTadd: using %s for GPIO%d", chip_path, offset)
+                        logging.info("TADD: using %s for GPIO%d", chip_path, offset)
                         break
                     except Exception as e:  # try next chip
                         last_err = e
@@ -76,23 +78,24 @@ class _GpioLine:
                 last_err: Exception | None = None
                 for chip_dev in sorted(glob.glob("/dev/gpiochip*")):
                     try:
-                        chip = _GPIOD.Chip(chip_dev)
+                        chip: Any = _GPIOD.Chip(chip_dev)
                         try:
                             if hasattr(chip, "num_lines"):
-                                num = chip.num_lines()
+                                num: int = int(chip.num_lines())
                                 if offset >= num:
                                     chip.close()
                                     continue
-                            line = chip.get_line(offset)
+                            line: Any = chip.get_line(offset)
+                            req_type: Any = getattr(_GPIOD, "LINE_REQ_DIR_OUT", 1)
                             line.request(
                                 consumer=consumer,
-                                type=_GPIOD.LINE_REQ_DIR_OUT,
+                                type=req_type,
                                 default_val=1,
                             )
                             self._chip = chip
                             self._line = line
                             self._state = 1
-                            logging.info("ArmTadd: using %s for GPIO%d", chip_dev, offset)
+                            logging.info("TADD: using %s for GPIO%d", chip_dev, offset)
                             break
                         except Exception as e:
                             last_err = e
@@ -105,36 +108,48 @@ class _GpioLine:
                 if self._line is None:
                     raise RuntimeError(str(last_err or "no gpiochip accepted offset"))
         except Exception as e:  # pragma: no cover - hardware/env dependent
-            logging.warning("ArmTadd: failed to init gpiod, using mock: %s", e)
+            logging.warning("TADD: failed to init gpiod, using mock: %s", e)
             self._mode = "mock"
 
     def set_value(self, val: int) -> None:
         self._state = 1 if val else 0
         if self._mode == "v2":  # pragma: no cover - hardware/env dependent
             try:
-                self._req.set_value(
-                    self._offset,
-                    _GPIOD.line.Value.ACTIVE if val else _GPIOD.line.Value.INACTIVE,
-                )
+                req = self._req
+                if req is not None:
+                    mod = _GPIOD
+                    if mod is not None:
+                        req.set_value(
+                            self._offset,
+                            mod.line.Value.ACTIVE if val else mod.line.Value.INACTIVE,
+                        )
             except Exception as e:
-                logging.warning("ArmTadd: gpiod v2 set_value failed: %s", e)
+                logging.warning("TADD: gpiod v2 set_value failed: %s", e)
         elif self._mode == "v1":  # pragma: no cover - hardware/env dependent
             try:
-                self._line.set_value(val)
+                line = self._line
+                if line is not None:
+                    line.set_value(val)
             except Exception as e:
-                logging.warning("ArmTadd: gpiod v1 set_value failed: %s", e)
+                logging.warning("TADD: gpiod v1 set_value failed: %s", e)
         else:
             logging.debug("MockGPIO: line %s -> %s", self._offset, val)
 
     def close(self) -> None:
         if self._mode == "v2":  # pragma: no cover - hardware/env dependent
             with contextlib.suppress(Exception):
-                self._req.release()  # type: ignore[attr-defined]
+                req = self._req
+                if req is not None:
+                    req.release()  # type: ignore[attr-defined]
         elif self._mode == "v1":  # pragma: no cover - hardware/env dependent
             with contextlib.suppress(Exception):
-                self._line.release()
+                line = self._line
+                if line is not None:
+                    line.release()
             with contextlib.suppress(Exception):
-                self._chip.close()
+                chip = self._chip
+                if chip is not None:
+                    chip.close()
 
     def __del__(self):  # pragma: no cover - best-effort cleanup
         try:
@@ -143,7 +158,7 @@ class _GpioLine:
             pass
 
 
-class ArmTadd:
+class TADD:
     """
     Manage Raspberry Pi CM5 BCM GPIO 16 used to ARM the TADD-2 Mini.
 
@@ -152,13 +167,47 @@ class ArmTadd:
     """
 
     _PIN: int = 16  # BCM numbering (line offset on gpiochip0)
+    _shared_line: ClassVar[_GpioLine | None] = None
 
     def __init__(self) -> None:
-        # Initialize GPIO line as an output and drive logic high (inactive)
-        self._line = _GpioLine(self._PIN)
+        # Initialize once per process and reuse the same requested line.
+        # This avoids leaking multiple requests and hitting EBUSY on re-instantiation.
+        if TADD._shared_line is None:
+            TADD._shared_line = _GpioLine(self._PIN)
+        assert TADD._shared_line is not None
+        self._line: _GpioLine = TADD._shared_line
 
     def pulse(self) -> None:
-        """Drive GPIO 16 LOW briefly, then back to HIGH."""
+        """Drive ARM pin LOW for 1 second or more per manual, then back to HIGH."""
         self._line.set_value(0)
-        time.sleep(0.110)
+        time.sleep(1.1)
         self._line.set_value(1)
+
+    @classmethod
+    def close(cls) -> None:
+        """Release the shared GPIO line if held."""
+        if cls._shared_line is not None:
+            cls._shared_line.close()
+            cls._shared_line = None
+
+    def __enter__(self) -> TADD:
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: TracebackType | None,
+    ) -> None:
+        # Intentionally do not auto-close to preserve shared singleton semantics.
+        # Call TADD.close() explicitly at shutdown if needed.
+        pass
+
+# Ensure GPIO line is released when the process exits
+try:
+    import atexit as _atexit  # late import to avoid unused import if not needed
+
+    _atexit.register(TADD.close)
+except Exception:
+    # Best-effort; safe to ignore if registration fails
+    pass
