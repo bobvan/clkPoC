@@ -37,18 +37,27 @@ class PhaseTrack:
 
     class PllPi:
         def __init__(self, hzPerLsb: float, codeMin: int, codeMax: int, codeInit: int) -> None:
+            # Controller gains in Hz-domain for e in seconds (B=0.05 Hz, zeta=0.7):
             self.kpHz: float = 0.4398230
             self.kiHz: float = 0.0986960
-            self.ts: float = 1.0  # 1 PPS
-            self.hzPerLsb: float = hzPerLsb  # negative in your case
+            self.ts: float = 1.0  # seconds per update (PPS rate)
+
+            # Actuator sensitivity (Hz per DAC LSB); your value is ~ -4.20347e-05
+            self.hzPerLsb: float = hzPerLsb
+
             self.codeMin: int = codeMin
             self.codeMax: int = codeMax
             self.code: int = codeInit
-            self.prevErr: float | None = None
-            self.uHz: float = 0.0  # current frequency correction
+
+            self.prevErr: float | None = None  # seconds
+            # XXX don't love this name
+            self.freqHz: float = 0.0              # frequency correction (Hz), NOT microhertz
+
+            # Optional: carry fractional LSBs to reduce limit cycles
+            self.fracLsb: float = 0.0
 
         def step(self, errSec: float) -> int:
-            # wrap phase error to (-0.5, 0.5]
+            # Wrap PPS phase error into (-0.5, 0.5]
             while errSec <= -0.5:
                 errSec += 1.0
             while errSec > 0.5:
@@ -58,24 +67,28 @@ class PhaseTrack:
                 self.prevErr = errSec
 
             deltaErr = errSec - self.prevErr
-            # velocity PI in Hz
-            self.uHz = self.uHz + self.kpHz * deltaErr + self.kiHz * self.ts * errSec
-            print("One: ", self.kpHz * deltaErr)
-            print("Two: ", self.kiHz * self.ts * errSec)
-            print("Three: ", self.uHz + self.kpHz * deltaErr + self.kiHz * self.ts * errSec)
-            print(f"  PllPi: err {errSec:.3e} kpHz {self.kpHz} deltaErr {deltaErr:.3e} uHz {self.uHz:6e}")
 
-            # convert frequency correction to DAC increment (handles sign via hzPerLsb)
-            deltaCode = int(round(self.uHz / self.hzPerLsb))
+            # Velocity PI in Hz
+            self.freqHz = self.freqHz + self.kpHz * deltaErr + self.kiHz * self.ts * errSec
+            print(f"  PllPi: err {errSec:.3e} kpHz {self.kpHz} deltaErr {deltaErr:.3e} freqHz {self.freqHz:6e}")
+
+            # Convert frequency correction (Hz) to DAC codes via Hz/LSB
+            targetLsb = self.freqHz / self.hzPerLsb + self.fracLsb
+            deltaCode = int(round(targetLsb))
+            self.fracLsb = targetLsb - float(deltaCode)  # keep residual for next step
+
             newCode = self.code + deltaCode
 
-            # clamp and simple anti-windup: if clamped, keep uHz consistent with code
+            # Clamp and simple anti-windup: keep freqHz consistent with the actually applied code
             if newCode < self.codeMin:
                 newCode = self.codeMin
-                self.uHz = (newCode - self.code) * self.hzPerLsb
+                self.freqHz = (newCode - self.code) * self.hzPerLsb
+                self.fracLsb = 0.0
             elif newCode > self.codeMax:
                 newCode = self.codeMax
-                self.uHz = (newCode - self.code) * self.hzPerLsb
+                self.freqHz = (newCode - self.code) * self.hzPerLsb
+                self.fracLsb = 0.0
+            print(f"fracLsb {self.fracLsb:.3e} targetLsb {targetLsb:.3e} deltaCode {deltaCode} newCode {newCode}")
 
             self.code = newCode
             self.prevErr = errSec
@@ -95,6 +108,7 @@ class PhaseTrack:
             dscTi = self.lastPair.dscTs.refTs.subFrom(pair.dscTs.refTs).toUnits()
 #            print(f"PhaseTrack: gnsTi {gnsTi} dscTi {dscTi} ")
             # Get fractional frequency error in parts per billion
+            assert gnsTi != 0.0, "Zero gnsTi in PhaseTrack"
             ffePpb = 1e9*(dscTi-gnsTi)/gnsTi
             ffePpbRm15 = self.ffeRm15.add(ffePpb)
             print(f"PhaseTrack: ffePpmRm15 {ffePpbRm15:8.3f} ", end="")
