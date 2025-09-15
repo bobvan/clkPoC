@@ -10,7 +10,7 @@ import serial_asyncio as serialAsyncio
 from clkpoc.quietWatch import QuietWatch
 from clkpoc.serialAsyncioShim import PausedReads, getSerialObj
 from clkpoc.topicPublisher import TopicPublisher
-from clkpoc.tsn import TicTs, Tsn
+from clkpoc.tsTypes import TicTs, Ts
 
 
 class TicState(Enum):
@@ -117,9 +117,9 @@ class TIC:
                     # print("ignoring TIC line", line)
                     continue  # Ignore the line if it doesn't match a timestamp
                 self.dog.pet()
-                capTs = Tsn.now()
+                capTs = Ts.now()
                 integerStr, fracStr, chan = match.group('integerStr', 'fracStr', 'chan')
-                refTs = Tsn.fromStrs(integerStr, fracStr)
+                refTs = Ts.fromStrs(integerStr, fracStr)
                 ticTs = TicTs(refTs=refTs, capTs=capTs)
 #                print("got TIC data", ticTs)
                 self.ppsPub(ticTs, chan)

@@ -2,7 +2,7 @@ import copy
 
 from clkpoc.tic import TIC
 from clkpoc.topicPublisher import TopicPublisher
-from clkpoc.tsn import PairTs, TicTs, Tsn
+from clkpoc.tsTypes import PairTs, TicTs, Ts
 
 
 # Subscribe to two PPS topics and publish when a pair has capture
@@ -20,10 +20,10 @@ class PairPps:
         tic.pub.sub(gnsTopic, self.gnsCb)
         tic.pub.sub(dscTopic, self.dscCb)
 
-    def pubIfPair(self, capDelta: Tsn) -> None:
+    def pubIfPair(self, capDelta: Ts) -> None:
 #        print(f"PairPps capDelta {capDelta}")
         # publish only if capture timestamps are within 0.5 seconds
-        half_sec_units = Tsn.unitsPerSecond // 2
+        half_sec_units = Ts.unitsPerSecond // 2
         if abs(capDelta.units) >= half_sec_units:
 #            print("PairPps: Waiting for closeby Ts pair")
             return

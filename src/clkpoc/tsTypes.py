@@ -9,7 +9,7 @@ from tzlocal import get_localzone_name
 
 # A fixed point representaiton for timestamps.
 @dataclass(frozen=True)
-class Tsn:
+class Ts:
     # Note toPicoseconds() below must change if fracDigs != 12
     fracDigs: ClassVar[int] = 12 # Number of digits to right of decimal point
     unitsPerSecond: ClassVar[int] = 10 ** fracDigs
@@ -36,7 +36,7 @@ class Tsn:
 
     @classmethod
     def fromStrs(cls: type[Self], integerStr: str, fracStr: str) -> Self:
-        # Construct Tsn from separate integer and fractional strings
+        # Construct Ts from separate integer and fractional strings
         intPart = int(integerStr)
         sigDigs = fracStr[:cls.fracDigs]
         fracPart = int(sigDigs) * 10 ** (cls.fracDigs - len(sigDigs))
@@ -86,7 +86,7 @@ class Tsn:
         ...
 
     def multiply(self: Self, factor: int | float) -> Self:
-        """Return a new Tsn scaled by factor.
+        """Return a new Ts scaled by factor.
         - If factor is int: exact scaling.
         - If factor is float: compute exactly via as_integer_ratio and round to nearest
           picosecond (ties to even).
@@ -115,10 +115,10 @@ class Tsn:
         ...
 
     def divide(self: Self, value: int | float | Self) -> Self | float:
-        """Divide this Tsn.
-        - If value is int: return Tsn scaled by 1/value with round-to-even to picoseconds.
+        """Divide this Ts.
+        - If value is int: return Ts scaled by 1/value with round-to-even to picoseconds.
         - If value is float: same as above using as_integer_ratio.
-        - If value is Tsn: return dimensionless ratio self/value as float.
+        - If value is Ts: return dimensionless ratio self/value as float.
         """
         if isinstance(value, int):
             if value == 0:
@@ -138,7 +138,7 @@ class Tsn:
             if value.units == 0:
                 raise ZeroDivisionError("division by zero")
             return self.units / value.units
-        raise TypeError("value must be int, float, or Tsn")
+        raise TypeError("value must be int, float, or Ts")
 
     def toDecimal(self, places: int = fracDigs) -> str:
         if places < 0 or places > self.fracDigs:
@@ -261,12 +261,12 @@ class Tsn:
 
     def __repr__(self) -> str:
         # unambiguous developer form (great for logs with %r)
-        return f"Tsn(units={self.units})"
+        return f"Ts(units={self.units})"
 
 @dataclass(frozen=True)
 class TicTs:
-    refTs: Tsn  # Event timestamp on TIC's reference clock
-    capTs: Tsn  # Event timestamp capture time on host clock
+    refTs: Ts  # Event timestamp on TIC's reference clock
+    capTs: Ts  # Event timestamp capture time on host clock
 
     def __str__(self) -> str:
         return f"cap {self.capTs:L} tic {self.refTs:E}"

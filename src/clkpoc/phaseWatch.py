@@ -2,7 +2,7 @@ import logging
 
 from clkpoc.df.pairPps import PairPps
 from clkpoc.phaseStep import PhaseStep
-from clkpoc.tsn import PairTs, Tsn
+from clkpoc.tsTypes import PairTs, Ts
 
 
 class PhaseWatch:
@@ -20,8 +20,8 @@ class PhaseWatch:
         thresholdSec: absolute delta threshold in seconds for detection.
         """
         self.pairPps = pairPps
-        # Store threshold as Tsn units (picoseconds by default in Tsn)
-        self.threshold = Tsn.fromFloat(thresholdSec)
+        # Store threshold as Ts units (picoseconds by default in Ts)
+        self.threshold = Ts.fromFloat(thresholdSec)
         # Subscribe to the PairPps publisher for paired PPS events
         pairPps.pub.sub("pairPps", self._on_pair)
         self.haveStepped = False

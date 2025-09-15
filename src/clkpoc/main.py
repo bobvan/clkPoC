@@ -14,11 +14,6 @@ from clkpoc.tic import TIC
 # third party imports (install as needed)
 # import aiosqlite
 
-# XXX next up: Rename Tsn to Ts
-# XXX next up: Rename tests from Tsn to Ts
-# XXX next up: Rename tsn.py to tsTypes.py
-# XXX next up: Final Tsn search/cleanup
-
 # XXX next up: Implement DAC I2C writes (with asyncio.to_thread) and integrate into control loop
 # XXX next up: Initialize F9T to output TIM-TP messages and other required state
 # XXX next up: Define IPC messages for TIM-TP message and TIC timestamps with host time
