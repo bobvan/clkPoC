@@ -8,13 +8,11 @@ from enum import Enum
 from clkpoc.df.pairPps import PairPps
 from clkpoc.dfPpsCsvLog import PpsCsvLog
 from clkpoc.f9t import F9T
-from clkpoc.stepWatch import StepWatch
+from clkpoc.phaseWatch import PhaseWatch
 from clkpoc.tic import TIC
 
 # third party imports (install as needed)
 # import aiosqlite
-
-# XXX next up: Rename StepWatch to PhaseWatch
 
 # XXX next up: Move tests/testTs.py to aux/
 # XXX next up: Move clkTypes.py to aux/
@@ -152,7 +150,7 @@ async def main():
     PpsCsvLog(tic, "ppsDscOnRef", "ppsDsc.csv")
     pairPps = PairPps(tic, "ppsGnsOnRef", "ppsDscOnRef")
     # Watch for step changes between GNSS and disciplined ref timestamps
-    StepWatch(pairPps)  # use default threshold; adjust as needed
+    PhaseWatch(pairPps)  # use default threshold; adjust as needed
     tasks = [
         asyncio.create_task(f9t.run()),
         asyncio.create_task(tic.run()),

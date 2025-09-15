@@ -6,7 +6,7 @@ from clkpoc.ts_types import PairTs
 from clkpoc.tsn import Tsn
 
 
-class StepWatch:
+class PhaseWatch:
     """
     Subscribe to PairPps 'pairPps' topic and watch for
     the phase difference between GNSS and disciplined PPS reference
