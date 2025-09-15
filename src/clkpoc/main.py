@@ -6,15 +6,13 @@ import time
 from enum import Enum
 
 from clkpoc.df.pairPps import PairPps
-from clkpoc.dfPpsCsvLog import PpsCsvLog
+from clkpoc.df.ppsCsvLog import PpsCsvLog
 from clkpoc.f9t import F9T
 from clkpoc.phaseWatch import PhaseWatch
 from clkpoc.tic import TIC
 
 # third party imports (install as needed)
 # import aiosqlite
-
-# XXX next up: Move dfPpsCsvLog to df/
 
 # XXX next up: Add types from ts_types.py to tsn.py
 # XXX next up: Move ts_types.py to aux/

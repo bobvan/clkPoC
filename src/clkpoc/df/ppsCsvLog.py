@@ -1,5 +1,5 @@
-from clkpoc.ts_types import TicTs
 from clkpoc.tic import TIC
+from clkpoc.ts_types import TicTs
 
 
 class PpsCsvLog:
