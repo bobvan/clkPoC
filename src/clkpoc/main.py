@@ -14,10 +14,6 @@ from clkpoc.tic import TIC
 # third party imports (install as needed)
 # import aiosqlite
 
-# XXX next up: Move tests/testTs.py to aux/
-# XXX next up: Move clkTypes.py to aux/
-# XXX next up: Move publisher.py to aux/
-
 # XXX next up: Move dfPpsCsvLog to df/
 
 # XXX next up: Add types from ts_types.py to tsn.py
