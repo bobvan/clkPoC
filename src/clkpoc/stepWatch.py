@@ -9,7 +9,7 @@ from clkpoc.tsn import Tsn
 class StepWatch:
     """
     Subscribe to PairPps 'pairPps' topic and watch for
-    the difference between GNSS and disciplined PPS reference
+    the phase difference between GNSS and disciplined PPS reference
     timestamps to exceed a configurable threshold. If the threshold is exceeded,
     start a PhaseStep task to step the TADD-2 Mini's phase into coarse alignment with GNSS.
     This should only happen once per boot, so log a warning if it happends more than once.

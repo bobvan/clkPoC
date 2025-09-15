@@ -14,10 +14,24 @@ from clkpoc.tic import TIC
 # third party imports (install as needed)
 # import aiosqlite
 
-# XXX next up: Figure out why armTadd doesn't seem to be pulsing GPIO
-# XXX next up: Implement class to pulse TADD ARM pin via GPIO and integrate with StepWatch
+# XXX next up: Rename StepWatch to PhaseWatch
+
+# XXX next up: Move tests/testTs.py to aux/
+# XXX next up: Move clkTypes.py to aux/
+# XXX next up: Move publisher.py to aux/
+
+# XXX next up: Move dfPpsCsvLog to df/
+
+# XXX next up: Add types from ts_types.py to tsn.py
+# XXX next up: Move ts_types.py to aux/
+
+# XXX next up: Rename Tsn to Ts
+# XXX next up: Rename tests from Tsn to Ts
+# XXX next up: Rename tsn.py to tsTypes.py
+# XXX next up: Final Tsn search/cleanup
+
+# XXX next up: Implement DAC I2C writes (with asyncio.to_thread) and integrate into control loop
 # XXX next up: Initialize F9T to output TIM-TP messages and other required state
-# XXX next up: Define mapping of chA/B to PPS signals
 # XXX next up: Define IPC messages for TIM-TP message and TIC timestamps with host time
 # XXX next up: Clean up main.py and enable strict type checking
 

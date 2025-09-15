@@ -7,13 +7,14 @@ from clkpoc.TADD import TADD
 
 
 class PhaseStep:
-    """Singleton-like phase stepper that runs in the background.
+    """Singleton-like disciplined phase stepper that runs in the background.
 
     - First instantiation schedules a background asyncio Task and returns immediately.
     - Subsequent instantiations are no-ops while the task is active.
     - When the background task completes, a later instantiation can start a new one.
 
-    For now, the background task simply sleeps for 3 seconds.
+    First, pulse the ARM pin on the TADD-2 Mini via GPIO to trigger a phase step.
+    Then, wait to ignore any PPS pairs from before the phase stepped.
     """
 
     _task: ClassVar[asyncio.Task[None] | None] = None

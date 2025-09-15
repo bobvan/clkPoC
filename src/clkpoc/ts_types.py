@@ -12,7 +12,7 @@ class TicTs:
         return f"cap {self.capTs:L} tic {self.refTs:E}"
 
 
-# Paired up timestamps from GNSS PPS and disciplined oscillator PPS
+# Paired up timestamps from GNSS PPS and disciplined oscillator PPS for same UTC second
 @dataclass(frozen=True)
 class PairTs:
     gnsTs: TicTs
