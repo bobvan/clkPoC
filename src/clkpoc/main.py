@@ -2,13 +2,13 @@
 import asyncio
 import json
 import logging
-from enum import Enum
 
 from clkpoc.df.pairPps import PairPps
 from clkpoc.df.phaseTrack import PhaseTrack
 from clkpoc.df.ppsCsvLog import PpsCsvLog
 from clkpoc.f9t import F9T
 from clkpoc.phaseWatch import PhaseWatch
+from clkpoc.state import State
 from clkpoc.tic import TIC
 
 # third party imports (install as needed)
@@ -19,21 +19,6 @@ from clkpoc.tic import TIC
 # XXX next up: Initialize F9T to output TIM-TP messages and other required state
 # XXX next up: Define IPC messages for TIM-TP message and TIC timestamps with host time
 # XXX next up: Clean up main.py and enable strict type checking
-
-
-class Mode(Enum):
-    idle = 0
-    disciplining = 1
-    holdover = 2
-    fault = 3
-
-
-class State:
-    def __init__(self):
-        self.mode = Mode.idle
-        self.dacVal = 0
-        self.lastPpsErrorNs = None
-        self.health = {"sat": 0, "f9tOk": False, "ticOk": False}
 
 
 async def dacActor(cmdQueue):
@@ -125,6 +110,7 @@ async def main():
             eventBus.task_done()
 
     dacQueue = asyncio.Queue()
+    state = State()
     f9t = F9T(eventBus,
         "/dev/serial/by-id/usb-u-blox_AG_-_www.u-blox.com_u-blox_GNSS_receiver-if00", 9600)
     tic = TIC(eventBus,
@@ -134,7 +120,7 @@ async def main():
     pairPps = PairPps(tic, "ppsGnsOnRef", "ppsDscOnRef")
     # Watch for step changes between GNSS and disciplined ref timestamps
     PhaseWatch(pairPps)  # use default threshold; adjust as needed
-    PhaseTrack(pairPps)
+    PhaseTrack(pairPps, state)
     tasks = [
         asyncio.create_task(f9t.run()),
         asyncio.create_task(tic.run()),

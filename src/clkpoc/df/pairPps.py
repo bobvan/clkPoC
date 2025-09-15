@@ -33,8 +33,8 @@ class PairPps:
         self.pub.publish("pairPps", pair)
 #        print(f"PairPps: {pair}")
         # Deviation of dsc from gns timestamps
-        dscDev = pair.gnsTs.refTs.subFrom(pair.dscTs.refTs)
-        print(f"PairPps: dscDev {dscDev.elapsedStr()}")
+#        dscDev = pair.gnsTs.refTs.subFrom(pair.dscTs.refTs)
+#        print(f"PairPps: dscDev {dscDev.elapsedStr()}")
 
     def gnsCb(self, gnsTs: TicTs):
         self.gnsTs = copy.deepcopy(gnsTs)

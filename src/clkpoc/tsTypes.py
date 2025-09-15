@@ -48,6 +48,10 @@ class Ts:
         ns = time.time_ns()
         return cls(units = ns * 10 ** (cls.fracDigs - 9))
 
+    # When we want a dimensionless quantity
+    def toUnits(self) -> int:
+        return self.units
+
     def toPicoseconds(self) -> int:
         return self.units
 

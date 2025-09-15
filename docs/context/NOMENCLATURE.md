@@ -36,11 +36,15 @@
 
 * difference = minuend - subtrahend
 * difference = subtrahend.subFrom(minuend)
+* elapsed = finish - start
+* elapsed = start.subFrom(finish)
+* elapsed = prevTs.subFrom(thisTs)
 * Avoid: value.sub() for ambiguous ordering, confusion with subscribe
 
 ## Statistics
 
 * Absolute error: abs(measuredValue - trueValue)
 * Signed error: measuredValue - trueValue
-** Dsc deviation = Dsc timestamp - Gns timestamp
+  * Dsc deviation = Dsc timestamp - Gns timestamp
+* Relative error: (measuredValue - trueValue) / trueValue
 * Avoid: "delta" for ambiguous sign

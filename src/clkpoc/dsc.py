@@ -12,7 +12,7 @@ class Dsc:
         self.bus = SMBus(busNum)
         self.gain = gain
         self.writeControl(self.gain)
-        self.writeDac(32767)  # mid-scale on startup
+        self.writeDac(15000)  # mid-scale on startup
 
     @unique
     class CommandBytes(IntEnum):
@@ -34,7 +34,13 @@ class Dsc:
             self.CommandBytes.CMD_WRITE_DAC_AND_INPUT,
             [dataHigh, dataLow],
         )
-        print(f"DSC: wrote DAC value {value} (0x{value:04X})")
+#        print(f"DSC: wrote DAC value {value} (0x{value:04X})")
+
+    def readDac(self) -> int:
+        # Read back the DAC register (2 bytes)
+        data = self.bus.read_i2c_block_data(self.addr, 0x00, 2)
+        value = (data[0] << 8) | data[1]
+        return value
 
     def writeControl(self, gain: int = 1) -> None:
         # Control register bits are sent in the upper 5 bits of the first data byte:
