@@ -68,7 +68,7 @@ def test_add(frac_digs: int, units_per_second: int):
 def test_sub(frac_digs: int, units_per_second: int):
     ts1 = Ts.fromParts(10, 500 * 10**(frac_digs - 3))  # 10.500 seconds
     ts2 = Ts.fromParts(5, 250 * 10**(frac_digs - 3))   # 5.250 seconds
-    result = ts1.sub(ts2)
+    result = ts2.subFrom(ts1)
     expected_units = ts1.units - ts2.units
     assert result.units == expected_units
     assert result.toFloorParts() == (5, 250 * 10**(frac_digs - 3))  # 5.250 seconds
@@ -84,7 +84,7 @@ def test_add_negative(frac_digs: int, units_per_second: int):
 def test_sub_negative(frac_digs: int, units_per_second: int):
     ts1 = Ts.fromParts(10, 500 * 10**(frac_digs - 3))  # 10.500 seconds
     ts2 = Ts.fromParts(-5, -250 * 10**(frac_digs - 3)) # -5.250 seconds
-    result = ts1.sub(ts2)
+    result = ts2.subFrom(ts1)
     expected_units = ts1.units - ts2.units
     assert result.units == expected_units
     assert result.toFloorParts() == (15, 750 * 10**(frac_digs - 3))  # 15.750 seconds

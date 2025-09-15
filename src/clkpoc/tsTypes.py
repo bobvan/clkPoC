@@ -59,8 +59,8 @@ class Ts:
     def add(self: Self, other: Self) -> Self:
         return type(self)(self.units + other.units)
 
-    def sub(self: Self, other: Self) -> Self: # XXX make this subFrom()
-        return type(self)(self.units - other.units)
+    def subFrom(self: Self, minuend: Self) -> Self:
+        return type(self)(minuend.units - self.units)
 
     def roundQuotientToEven(self, num: int, den: int) -> int:
         # Internal helper: compute round-to-even of num/den to an int.

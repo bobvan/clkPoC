@@ -2,10 +2,10 @@
 import asyncio
 import json
 import logging
-import time
 from enum import Enum
 
 from clkpoc.df.pairPps import PairPps
+from clkpoc.df.phaseTrack import PhaseTrack
 from clkpoc.df.ppsCsvLog import PpsCsvLog
 from clkpoc.f9t import F9T
 from clkpoc.phaseWatch import PhaseWatch
@@ -14,6 +14,7 @@ from clkpoc.tic import TIC
 # third party imports (install as needed)
 # import aiosqlite
 
+# XXX next up: Move phaseWatch.py to df/phaseWatch.py
 # XXX next up: Implement DAC I2C writes (with asyncio.to_thread) and integrate into control loop
 # XXX next up: Initialize F9T to output TIM-TP messages and other required state
 # XXX next up: Define IPC messages for TIM-TP message and TIC timestamps with host time
@@ -27,14 +28,10 @@ class Mode(Enum):
     fault = 3
 
 
-def nowNs():
-    return time.monotonic_ns()
-
-
-class Registry:
+class State:
     def __init__(self):
         self.mode = Mode.idle
-        self.dacCode = 0
+        self.dacVal = 0
         self.lastPpsErrorNs = None
         self.health = {"sat": 0, "f9tOk": False, "ticOk": False}
 
@@ -50,23 +47,23 @@ async def dacActor(cmdQueue):
         cmdQueue.task_done()
 
 
-async def controlLoop(eventBus, reg, dacQueue):
-    kp = 0.1
-    ki = 0.02
-    integ = 0.0
-    while True:
-        ev = await eventBus.get()
-        if ev.kind == "ppsSample":
-            err = ev.data["ppsErrorNs"]
-            reg.lastPpsErrorNs = err
-            # simple PI loop (replace with your preferred filter)
-            integ += err
-            delta = kp * err + ki * integ
-            newCode = max(0, min(65535, int(reg.dacCode - delta)))
-            if newCode != reg.dacCode:
-                reg.dacCode = newCode
-                await dacQueue.put({"op": "setCode", "code": newCode})
-        eventBus.task_done()
+#async def phaseTrack(eventBus, state, dacQueue):
+#    kp = 0.1
+#    ki = 0.02
+#    integ = 0.0
+#    while True:
+#        ev = await eventBus.get()
+#        if ev.kind == "ppsSample":
+#            err = ev.data["ppsErrorNs"]
+#            state.lastPpsErrorNs = err
+#            # simple PI loop (replace with your preferred filter)
+#            integ += err
+#            delta = kp * err + ki * integ
+#            newCode = max(0, min(65535, int(state.dacVal - delta)))
+#            if newCode != state.dacVal:
+#                state.dacVal = newCode
+#                await dacQueue.put({"op": "setCode", "code": newCode})
+#        eventBus.task_done()
 
 
 async def storageWriter(eventBus):
@@ -85,17 +82,17 @@ async def storageWriter(eventBus):
         eventBus.task_done()
 
 
-async def ipcServer(reg, dacQueue, path="/tmp/gpsdo.sock"):
+async def ipcServer(state, dacQueue, path="/tmp/gpsdo.sock"):
     async def handle(reader, writer):
         try:
             raw = await reader.readline()
             req = json.loads(raw.decode())
             if req.get("cmd") == "getState":
                 resp = {
-                    "mode": reg.mode.name,
-                    "dacCode": reg.dacCode,
-                    "lastPpsErrorNs": reg.lastPpsErrorNs,
-                    "health": reg.health,
+                    "mode": state.mode.name,
+                    "dacVal": state.dacVal,
+                    "lastPpsErrorNs": state.lastPpsErrorNs,
+                    "health": state.health,
                 }
                 writer.write((json.dumps(resp) + "\n").encode())
             elif req.get("cmd") == "setDac":
@@ -115,7 +112,7 @@ async def ipcServer(reg, dacQueue, path="/tmp/gpsdo.sock"):
 
 async def main():
     logging.basicConfig(level=logging.INFO)
-    reg = Registry()
+    state = State()
     eventBus = asyncio.Queue(maxsize=1000)
     storageTap = asyncio.Queue(maxsize=2000)  # tee to storage
 
@@ -123,7 +120,7 @@ async def main():
     async def tee():
         while True:
             ev = await eventBus.get()
-            # fan out: controlLoop consumes directly; we also push to storageTap
+            # fan out: phaseTrack consumes directly; we also push to storageTap
             await storageTap.put(ev)
             eventBus.task_done()
 
@@ -137,13 +134,14 @@ async def main():
     pairPps = PairPps(tic, "ppsGnsOnRef", "ppsDscOnRef")
     # Watch for step changes between GNSS and disciplined ref timestamps
     PhaseWatch(pairPps)  # use default threshold; adjust as needed
+    PhaseTrack(pairPps)
     tasks = [
         asyncio.create_task(f9t.run()),
         asyncio.create_task(tic.run()),
-        asyncio.create_task(controlLoop(eventBus, reg, dacQueue)),
+#        asyncio.create_task(phaseTrack(eventBus, state, dacQueue)),
         asyncio.create_task(dacActor(dacQueue)),
         asyncio.create_task(storageWriter(storageTap)),
-        asyncio.create_task(ipcServer(reg, dacQueue)),
+        asyncio.create_task(ipcServer(state, dacQueue)),
         asyncio.create_task(tee()),
     ]
     print("main: All async tasks started")

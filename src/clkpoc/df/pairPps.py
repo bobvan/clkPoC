@@ -32,15 +32,16 @@ class PairPps:
         pair = PairTs(gnsTs=self.gnsTs, dscTs=self.dscTs)
         self.pub.publish("pairPps", pair)
 #        print(f"PairPps: {pair}")
-        tsDelta = pair.gnsTs.refTs.sub(pair.dscTs.refTs)
-        print(f"PairPps: capDelta {capDelta.elapsedStr()}, tsDelta {tsDelta.elapsedStr()}")
+        # Deviation of dsc from gns timestamps
+        dscDev = pair.gnsTs.refTs.subFrom(pair.dscTs.refTs)
+        print(f"PairPps: dscDev {dscDev.elapsedStr()}")
 
     def gnsCb(self, gnsTs: TicTs):
         self.gnsTs = copy.deepcopy(gnsTs)
         if self.dscTs is None:
             print("PairPps: Waiting for first dscTs")
             return
-        capDelta = gnsTs.capTs.sub(self.dscTs.capTs)
+        capDelta = gnsTs.capTs.subFrom(self.dscTs.capTs)
         self.pubIfPair(capDelta)
 
     def dscCb(self, dscTs: TicTs):
@@ -48,5 +49,5 @@ class PairPps:
         if self.gnsTs is None:
             print("PairPps: Waiting for first gns:Ts")
             return
-        capDelta = dscTs.capTs.sub(self.gnsTs.capTs)
+        capDelta = dscTs.capTs.subFrom(self.gnsTs.capTs)
         self.pubIfPair(capDelta)
