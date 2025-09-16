@@ -1,3 +1,4 @@
+# Why is this filename upper case when tic.py and f9t.py aren't?
 """
 Control ARM pin on TADD-2 Mini for Raspberry Pi CM5 using libgpiod.
 

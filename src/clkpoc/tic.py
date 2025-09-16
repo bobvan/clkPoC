@@ -79,6 +79,7 @@ class TIC:
         dogTask = asyncio.create_task(self.dog.run())
 
         try:
+            pat =  re.compile(r"(?P<integerStr>\d+)\.(?P<fracStr>\d{12}) ch(?P<chan>[AB])")
             while True:
                 raw = await reader.readline()
                 # XXX this is the spot to catch SerialException when TIC is unplugged
@@ -109,8 +110,6 @@ class TIC:
                 # only has 15 digits of precision, and the TIC outputs 12 digits
                 # after the decimal point, so precision could be lost after 100
                 # seconds. So we parse the integer and fractional parts separately.
-                pat =  re.compile(
-                    r"(?P<integerStr>\d+)\.(?P<fracStr>\d{12}) ch(?P<chan>[AB])")
                 match = pat.fullmatch(line)
                 if not match:
                     # XXX log stats here

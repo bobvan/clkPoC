@@ -20,7 +20,8 @@ class PhaseTrack:
         PhaseTrack: Control loop working to keep Dsc phase aligned with Gns.
         """
         # Subscribe to the PairPps publisher for paired PPS events
-        pairPps.pub.sub("pairPps", self.onPairPps)
+        # XXX disable for now; intend to start after coarseAligner finishes
+        #pairPps.pub.sub("pairPps", self.onPairPps)
         self.state = state
         self.dsc = Dsc()
         self.state.dacVal = self.dsc.readDac()

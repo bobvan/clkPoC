@@ -1,3 +1,4 @@
+# XXX Maybe make this coarsePhaseWatch.py?
 import logging
 
 from clkpoc.df.pairPps import PairPps
@@ -33,7 +34,7 @@ class PhaseWatch:
 
     def doStep(self) -> None:
         # Pulse ARM pin on TADD-2 Mini via GPIO to trigger step in dscTs phase
-        self.phaseStep = PhaseStep() # Start background phase stepper if not already running
+        self.phaseStep = PhaseStep(self.pairPps) # Start background phase stepper if not already running
         self.haveStepped = True
 
     def onPairPps(self, pair: PairTs) -> None:

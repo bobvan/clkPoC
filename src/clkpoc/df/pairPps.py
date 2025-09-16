@@ -23,9 +23,10 @@ class PairPps:
     def pubIfPair(self, capDelta: Ts) -> None:
 #        print(f"PairPps capDelta {capDelta}")
         # publish only if capture timestamps are within 0.5 seconds
-        half_sec_units = Ts.unitsPerSecond // 2
-        if abs(capDelta.units) >= half_sec_units:
-#            print("PairPps: Waiting for closeby Ts pair")
+        halfSecInPs = 500_000_000_000
+        if abs(capDelta.toPicoseconds()) >= halfSecInPs:
+            # Note that this is noramal for 1/2 of all potential pairs
+#            print(f"PairPps: Waiting for closeby Ts pair, {capDelta.elapsedStr()} apart")
             return
         if self.gnsTs is None or self.dscTs is None:
             return  # Additional safety check for Pyright
@@ -37,16 +38,18 @@ class PairPps:
 #        print(f"PairPps: dscDev {dscDev.elapsedStr()}")
 
     def gnsCb(self, gnsTs: TicTs):
-        self.gnsTs = copy.deepcopy(gnsTs)
+        self.gnsTs = copy.deepcopy(gnsTs) # XXX copy should no longer be needed
         if self.dscTs is None:
+            # This is normal for 1/2 of all startups
             print("PairPps: Waiting for first dscTs")
             return
         capDelta = gnsTs.capTs.subFrom(self.dscTs.capTs)
         self.pubIfPair(capDelta)
 
     def dscCb(self, dscTs: TicTs):
-        self.dscTs = copy.deepcopy(dscTs)
+        self.dscTs = copy.deepcopy(dscTs) # XXX copy should no longer be needed
         if self.gnsTs is None:
+            # This is normal for 1/2 of all startups
             print("PairPps: Waiting for first gns:Ts")
             return
         capDelta = dscTs.capTs.subFrom(self.gnsTs.capTs)

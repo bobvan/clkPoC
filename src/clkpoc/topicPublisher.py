@@ -45,6 +45,7 @@ class TopicPublisher:
 
     def publish(self, topic: str, event: Any) -> None:
         if topic not in self.subscribers or not self.subscribers[topic]:
+            logging.warning(f"{self.name}: publish on '{topic}' with no subscribers")
             return
         # iterate over a copy so unsub during delivery is safe
         for cb in list(self.subscribers[topic]):
