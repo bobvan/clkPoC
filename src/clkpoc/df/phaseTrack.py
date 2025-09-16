@@ -30,56 +30,156 @@ class PhaseTrack:
         self.lastAdj = 0.0 # XXX should be lastAdjVal
         self.pairCnt = 0
         self.lastPair: PairTs | None = None
-        self.ffeRm15 = RollingMean(15)  # rolling mean of fractional freq error in ppm
-        self.pllPi = self.PllPi(hzPerLsb = -4.2034700315e-05,
+        self.ffeRm15 = RollingMean(15)  # rolling mean of fractional freq error in ppb
+        # XXX consider opening up codeMin/Max
+        self.pllWithFll = self.PllWithFll(hzPerLsb = -4.2034700315e-05,
             codeMin=11400, codeMax=15000, codeInit=self.state.dacVal)
 
 
-    class PllPi:
-        def __init__(self, hzPerLsb: float, codeMin: int, codeMax: int, codeInit: int) -> None:
-            # Controller gains in Hz-domain for e in seconds (B=0.05 Hz, zeta=0.7):
-            self.kpHz: float = 0.4398230
-            self.kiHz: float = 0.0986960
-            self.ts: float = 1.0  # seconds per update (PPS rate)
 
-            # Actuator sensitivity (Hz per DAC LSB); your value is ~ -4.20347e-05
+    class PllWithFll:
+        """
+        Hybrid PLL+FLL controller for PPS disciplining.
+
+        Inputs to step():
+        errSec  -> phase error in seconds (osc - ref), already wrapped to (-0.5, 0.5]
+
+        Output:
+        next DAC code (int)
+
+        Internals:
+        - Controller output kept in Hz, converted to DAC via hzPerLsb (can be negative).
+        - FLL active when |err| >= engageLowSec, fully on at |err| >= engageHighSec.
+        """
+
+        def __init__(
+            self,
+            hzPerLsb: float,             # Hz per DAC LSB (your slope, can be negative)
+            codeMin: int,
+            codeMax: int,
+            codeInit: int,
+            f0Hz: float = 10e6,          # nominal frequency, e.g., 10e6
+            sampleTime: float = 1.0,     # loop period in seconds (PPS)
+            # bandwidths and damping
+            trackBandHz: float = 0.05,   # quiet tracking bandwidth
+            acquireBandHz: float = 0.25, # faster acquisition bandwidth
+            zeta: float = 0.7,
+            # FLL assist settings
+            engageHighNs: float = 400.0, # ≥ this, FLL fully engaged
+            engageLowNs: float = 20.0,   # ≤ this, FLL off
+            fllGain: float = 0.9,        # scale on frequency estimate, 0.5..1.0 typical
+            fllMaxHz: float = 0.001,     # cap FLL shove per update (Hz)
+            # derivative smoothing for FLL (EMA on phase)
+            emaAlpha: float = 0.2        # 0=no smooth, 1=heavy smooth; choose small (0.1..0.3)
+        ) -> None:
+            # plant / actuator
+            self.f0Hz: float = f0Hz
             self.hzPerLsb: float = hzPerLsb
 
+            # DAC limits/state
             self.codeMin: int = codeMin
             self.codeMax: int = codeMax
             self.code: int = codeInit
 
-            self.prevErr: float | None = None  # seconds
-            # XXX don't love this name
-            self.freqHz: float = 0.0              # frequency correction (Hz), NOT microhertz
+            # timing
+            self.ts: float = sampleTime
 
-            # Optional: carry fractional LSBs to reduce limit cycles
-            self.fracLsb: float = 0.0
+            # design params
+            self.zeta: float = zeta
+            self.trackBandHz: float = trackBandHz
+            self.acquireBandHz: float = acquireBandHz
+
+            # convert ns thresholds to s
+            self.engageHighSec: float = engageHighNs * 1e-9
+            self.engageLowSec: float = engageLowNs * 1e-9
+
+            # FLL params
+            self.fllGain: float = fllGain
+            self.fllMaxHz: float = fllMaxHz
+
+            # controller states
+            self.freqHz: float = 0.0              # controller output in Hz
+            self.prevErr: float | None = None  # previous raw phase error (s)
+            self.emaErr: float | None = None   # smoothed phase error for derivative
+            self.emaAlpha: float = emaAlpha
+            self.fracLsb: float = 0.0             # sigma-delta accumulator (LSB fraction)
+
+            # start in acquisition bandwidth, switch automatically as error shrinks
+            self.kpHz: float = 0.0
+            self.kiHz: float = 0.0
+            self.setPllBandwidth(self.acquireBandHz)
+
+        def setPllBandwidth(self, bandHz: float) -> None:
+            """Set PLL PI gains for a target closed-loop bandwidth bandHz (Hz)."""
+            omega = 2.0 * 3.141592653589793 * bandHz
+            # continuous-time velocity-PI gains (phase error in seconds, output in Hz)
+            self.kpHz = 2.0 * self.zeta * omega
+            self.kiHz = omega * omega
+
+        def blendAlpha(self, absErr: float) -> float:
+            """FLL blend: 1 at ≥ engageHighSec, 0 at ≤ engageLowSec, linear in-between."""
+            if absErr >= self.engageHighSec:
+                return 1.0
+            if absErr <= self.engageLowSec:
+                return 0.0
+            return (absErr - self.engageLowSec) / (self.engageHighSec - self.engageLowSec)
+
+        def clamp(self, x: float, lo: float, hi: float) -> float:
+            return lo if x < lo else hi if x > hi else x
 
         def step(self, errSec: float) -> int:
-            # Wrap PPS phase error into (-0.5, 0.5]
+            # phase wrap (safety; caller should usually pre-wrap)
             while errSec <= -0.5:
                 errSec += 1.0
             while errSec > 0.5:
                 errSec -= 1.0
 
+            absErr = abs(errSec)
+
+            # bandwidth scheduling: fast when far, quiet when near
+            if absErr > self.engageLowSec * 1.2:
+                # use acquisition bandwidth
+                self.setPllBandwidth(self.acquireBandHz)
+            else:
+                # use tracking bandwidth
+                self.setPllBandwidth(self.trackBandHz)
+
+            # initialize history on first call
             if self.prevErr is None:
                 self.prevErr = errSec
+                self.emaErr = errSec
 
-            deltaErr = errSec - self.prevErr
+            # update EMA for derivative used by FLL (reduces jitter sensitivity)
+            assert self.emaErr is not None
+            self.emaErr = (1.0 - self.emaAlpha) * self.emaErr + self.emaAlpha * errSec
 
-            # Velocity PI in Hz
-            self.freqHz = self.freqHz + self.kpHz * deltaErr + self.kiHz * self.ts * errSec
-            print(f"  PllPi: err {errSec:.3e} kpHz {self.kpHz} deltaErr {deltaErr:.3e} freqHz {self.freqHz:6e}")
+            # compute raw and smoothed error deltas
+            deltaErrRaw = errSec - self.prevErr
+            deltaErrEma = errSec - self.emaErr  # small smoothing → small delay
 
-            # Convert frequency correction (Hz) to DAC codes via Hz/LSB
+            # -------- PLL: velocity PI in Hz (uses raw error for minimal delay) --------
+            self.freqHz = self.freqHz + self.kpHz * deltaErrRaw + self.kiHz * self.ts * errSec
+            justfreqHz = self.freqHz  # for debugging
+
+            # -------- FLL assist: frequency estimate from phase slope --------
+            # fractional freq y ≈ -(d phi / dt); with phi=errSec (seconds), dy ≈ -(deltaErr / Ts)
+            fracFreq = -(deltaErrEma / self.ts)
+            fllHz = self.fllGain * self.f0Hz * fracFreq
+            fllHz = self.clamp(fllHz, -self.fllMaxHz, self.fllMaxHz)
+
+            # blend FLL based on phase magnitude (1 at 400 ns, 0 at 20 ns)
+            alpha = self.blendAlpha(absErr)
+            self.freqHz += alpha * fllHz
+#            print(f"freq {justfreqHz:.6f}+{alpha*fllHz:.6f}={self.freqHz:.6f} Hz")
+
+            # -------- convert Hz → DAC codes with sigma-delta on LSBs --------
             targetLsb = self.freqHz / self.hzPerLsb + self.fracLsb
             deltaCode = int(round(targetLsb))
-            self.fracLsb = targetLsb - float(deltaCode)  # keep residual for next step
+            self.fracLsb = targetLsb - float(deltaCode)
 
             newCode = self.code + deltaCode
 
-            # Clamp and simple anti-windup: keep freqHz consistent with the actually applied code
+            # -------- clamp and simple anti-windup --------
             if newCode < self.codeMin:
                 newCode = self.codeMin
                 self.freqHz = (newCode - self.code) * self.hzPerLsb
@@ -88,7 +188,6 @@ class PhaseTrack:
                 newCode = self.codeMax
                 self.freqHz = (newCode - self.code) * self.hzPerLsb
                 self.fracLsb = 0.0
-            print(f"fracLsb {self.fracLsb:.3e} targetLsb {targetLsb:.3e} deltaCode {deltaCode} newCode {newCode}")
 
             self.code = newCode
             self.prevErr = errSec
@@ -111,12 +210,13 @@ class PhaseTrack:
             assert gnsTi != 0.0, "Zero gnsTi in PhaseTrack"
             ffePpb = 1e9*(dscTi-gnsTi)/gnsTi
             ffePpbRm15 = self.ffeRm15.add(ffePpb)
-            print(f"PhaseTrack: ffePpmRm15 {ffePpbRm15:8.3f} ", end="")
-        else:
-            print("PhaseTrack: ffePpm      n/a ", end="")
+#            print(f"PhaseTrack: ffePpbRm15 {ffePpbRm15:8.3f} ", end="")
+#        else:
+#            print("PhaseTrack: ffePpb      n/a ", end="")
         self.lastPair = pair
 
-        newVal = self.pllPi.step(dscDev.toPicoseconds() * 1e-12)
+        newVal = self.pllWithFll.step(dscDev.toPicoseconds() * 1e-12)
+        print(f"errSec {dscDev.toPicoseconds()*1e-12:8e}, code {newVal}")
         adjVal = self.lastVal - newVal
         accel = adjVal - self.lastAdj
         self.lastAdj = adjVal
@@ -127,8 +227,8 @@ class PhaseTrack:
         #self.lastAdj = adjVal
         #newVal = max(0, min(65535, int(self.state.dacVal - adjVal)))
         #if newVal != self.state.dacVal:
-        #    self.state.dacVal = newVal
-        #    self.dsc.writeDac(newVal)
+        self.state.dacVal = newVal
+        self.dsc.writeDac(newVal)
 
-        print(f"pairCnt {self.pairCnt:3d}, dscDev {dscDev.elapsedStr()}, "
-              f"adj {adjVal:.1f}, accel {accel:.2f}, newVal {newVal}")
+#        print(f"pairCnt {self.pairCnt:3d}, dscDev {dscDev.elapsedStr()}, "
+#              f"adj {adjVal:.1f}, accel {accel:.2f}, newVal {newVal}")
