@@ -14,8 +14,7 @@ UbxHandler = Callable[[UBXMessage, bytes], Awaitable[None]]
 NmeaHandler = Callable[[NMEAMessage, bytes], Awaitable[None]]
 
 class F9T:
-    def __init__(self, eventBus: asyncio.Queue[Any], port: str, baud: int):
-        self.eventBus = eventBus
+    def __init__(self, port: str, baud: int):
         self.port = port
         self.baud = baud
         self.dog = QuietWatch(name="F9T")

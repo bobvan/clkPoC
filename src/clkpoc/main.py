@@ -111,15 +111,15 @@ async def main():
 
     dacQueue = asyncio.Queue()
     state = State()
-    f9t = F9T(eventBus,
+    f9t = F9T(
         "/dev/serial/by-id/usb-u-blox_AG_-_www.u-blox.com_u-blox_GNSS_receiver-if00", 9600)
-    tic = TIC(eventBus,
+    tic = TIC(
         "/dev/serial/by-id/usb-Arduino__www.arduino.cc__0042_95037323535351803130-if00", 115200)
     PpsCsvLog(tic, "ppsGnsOnRef", "ppsGns.csv")
     PpsCsvLog(tic, "ppsDscOnRef", "ppsDsc.csv")
     pairPps = PairPps(tic, "ppsGnsOnRef", "ppsDscOnRef")
     # Watch for step changes between GNSS and disciplined ref timestamps
-    PhaseWatch(pairPps)  # use default threshold; adjust as needed
+    PhaseWatch(pairPps, state)  # use default threshold; adjust as needed
     PhaseTrack(pairPps, state)
     tasks = [
         asyncio.create_task(f9t.run()),

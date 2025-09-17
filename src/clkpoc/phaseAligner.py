@@ -1,57 +1,44 @@
 # XXX rename to coarseAligner.py after testing
 # XXX then maybe fineAligner.py for the other one
 
-def clamp(x: float, lo: float, hi: float) -> float:
+from collections import deque
+
+
+def clampInt(x: int, lo: int, hi: int) -> int:
     return lo if x < lo else hi if x > hi else x
 
-class PhaseAligner:
+class PhaseAlignerDirect:
     """
-    Aggressive pre-lock aligner for PPS phase.
-    Runs for a few seconds right after a known step, then exits when |err| <= goalNs.
-    Each call handles one PPS update (Ts=1 s typical).
+    Simple aligner:
+      - Drives with fixed ±maxPpb toward zero phase.
+      - Estimates frequency from LS slope of recent phase errors.
+      - Continuously computes codeZero = code - f_est / hzPerLsb.
+      - When |err| <= goal, ramps to codeZero (slew-limited) and exits.
 
-    Control law (per tick):
-      y = sign(err) * min(maxPpb, |err| / tauSec in ppb)
-      fHz = f0Hz * y * 1e-9
-      deltaCode ≈ fHz / hzPerLsb   (with sigma-delta carry and rate limit)
-
-    Parameters
-    ----------
-    f0Hz          : nominal oscillator frequency (e.g., 10_000_000.0)
-    hzPerLsb      : actuator slope in Hz per DAC code (can be negative)
-    codeMin/Max   : DAC rails
-    codeInit      : starting DAC code
-    tauSec        : target exponential time constant (aggressiveness)
-    maxPpb        : hard cap on fractional frequency push (VCO pull limit, in ppb)
-    goalNs        : exit threshold on |phase| in ns
-    maxCodesPerStep : safety slew limit (codes per PPS)
-    holdCount     : require this many consecutive in-goal samples to exit
+    errSec: phase error in seconds (osc - ref), pre-wrapped to (-0.5, 0.5]
     """
 
     def __init__(
         self,
         f0Hz: float,
-        hzPerLsb: float,
+        hzPerLsb: float,      # Hz per DAC LSB (can be negative)
         codeMin: int,
         codeMax: int,
         codeInit: int,
-        tauSec: float = 5.0,
-        maxPpb: float = 20.0,
+        maxPpb: float = 20.0, # aggressive shove (ppb)
         goalNs: float = 15.0,
-        maxCodesPerStep: int = 50,
         sampleTime: float = 1.0,
-        holdCount: int = 2
+        win: int = 7,         # LS window for slope (odd, 5–9 typical)
+        holdCount: int = 2,   # consecutive in-band ticks before handoff
+        shoveCodesPerStep: int = 50,   # DAC slew during shove
+        rampCodesPerStep: int = 25     # DAC slew during final ramp
     ) -> None:
-        if tauSec <= 0.0:
-            raise ValueError("tauSec must be positive")
-        if maxPpb <= 0.0:
-            raise ValueError("maxPpb must be positive")
-        if goalNs <= 0.0:
-            raise ValueError("goalNs must be positive")
-        if maxCodesPerStep < 1:
-            raise ValueError("maxCodesPerStep must be >= 1")
-        if sampleTime <= 0.0:
-            raise ValueError("sampleTime must be positive")
+        if win < 3:
+            raise ValueError("win must be >= 3")
+        if maxPpb <= 0.0 or goalNs <= 0.0 or sampleTime <= 0.0:
+            raise ValueError("maxPpb, goalNs, sampleTime must be positive")
+        if shoveCodesPerStep < 1 or rampCodesPerStep < 1 or holdCount < 1:
+            raise ValueError("slew limits and holdCount must be >= 1")
 
         self.f0Hz: float = f0Hz
         self.hzPerLsb: float = hzPerLsb
@@ -59,21 +46,46 @@ class PhaseAligner:
         self.codeMax: int = codeMax
         self.code: int = codeInit
 
-        self.tauSec: float = tauSec
+        self.ts: float = sampleTime
         self.maxPpb: float = maxPpb
         self.goalSec: float = goalNs * 1e-9
-        self.ts: float = sampleTime
-        self.maxCodesPerStep: int = maxCodesPerStep
-        self.holdCountNeed: int = holdCount
+        self.win: int = win
+        self.holdNeed: int = holdCount
+        self.shoveCodesPerStep: int = shoveCodesPerStep
+        self.rampCodesPerStep: int = rampCodesPerStep
 
-        self.fracLsb: float = 0.0
+        # history for LS slope
+        self.errHist: deque[float] = deque(maxlen=self.win)
+        self.codeHist: deque[int] = deque(maxlen=self.win)  # optional log for you
+        self.freqEstHz: float = 0.0
+        self.codeZero: float | None = None  # continuously updated estimate
+
         self.inGoalStreak: int = 0
+        self.phaseReached: bool = False  # once True, we ramp to codeZero
         self.done: bool = False
+
+    def fitSlopePerSec(self, ys: list[float]) -> float:
+        """Least-squares slope dy/dt using x = 0,1,2,..., ts=1s spacing (then scale by ts)."""
+        n = len(ys)
+        if n < 2:
+            return 0.0
+        xMean = (n - 1) / 2.0
+        yMean = sum(ys) / float(n)
+        sxx = 0.0
+        sxy = 0.0
+        for i, y in enumerate(ys):
+            dx = i - xMean
+            dy = y - yMean
+            sxx += dx * dx
+            sxy += dx * dy
+        if sxx == 0.0:
+            return 0.0
+        slopePerSample = sxy / sxx
+        return slopePerSample / self.ts  # seconds per second
 
     def step(self, errSecRaw: float) -> tuple[int, bool]:
         """
         One PPS update. Returns (newCode, doneFlag).
-        errSecRaw should be phase error in seconds (osc - ref), pre-wrapped to (-0.5, 0.5].
         """
         if self.done:
             return self.code, True
@@ -85,45 +97,54 @@ class PhaseAligner:
         while errSec > 0.5:
             errSec -= 1.0
 
-        absErr = abs(errSec)
+        # collect histories
+        self.errHist.append(errSec)
+        self.codeHist.append(self.code)
 
-        # in-goal tracking
-        if absErr <= self.goalSec:
+        # estimate frequency from LS slope of phase
+        if len(self.errHist) >= 3:
+            slope = self.fitSlopePerSec(list(self.errHist))   # seconds/second
+            self.freqEstHz = -self.f0Hz * slope               # Hz
+            # compute zero-frequency code from current code and freq estimate
+            self.codeZero = float(self.code) - (self.freqEstHz / self.hzPerLsb)
+
+        # goal tracking
+        if abs(errSec) <= self.goalSec:
             self.inGoalStreak += 1
-            if self.inGoalStreak >= self.holdCountNeed:
-                self.done = True
-                return self.code, True
         else:
             self.inGoalStreak = 0
 
-        # choose an aggressive but bounded fractional frequency push (ppb)
-        # exponential pull-in with time constant tauSec, capped at maxPpb
-        desiredPpb = min(self.maxPpb, (absErr / self.tauSec) * 1e9)
-        yPpb = desiredPpb if errSec > 0.0 else -desiredPpb  # positive err → speed up
+        print(f"PhaseAligner: reached {self.phaseReached}, err {errSec*1e9:8.1f} ns, f_est {self.freqEstHz:8.1f} Hz, code {self.code:5d}, code0 {self.codeZero if self.codeZero is not None else 'N/A':8}")
+        if not self.phaseReached:
+            # still in shove phase
+            yPpb = self.maxPpb if errSec > 0.0 else (-self.maxPpb)  # speed up if late
+            fHzCmd = self.f0Hz * yPpb * 1e-9
+            desiredDelta = fHzCmd / self.hzPerLsb
+            deltaCode = int(round(desiredDelta))
+            if deltaCode > self.shoveCodesPerStep:
+                deltaCode = self.shoveCodesPerStep
+            elif deltaCode < -self.shoveCodesPerStep:
+                deltaCode = -self.shoveCodesPerStep
+            self.code = clampInt(self.code + deltaCode, self.codeMin, self.codeMax)
 
-        # convert to Hz
-        fHz = self.f0Hz * yPpb * 1e-9
+            if self.inGoalStreak >= self.holdNeed:
+                self.phaseReached = True  # start ramping next tick
+            return self.code, False
 
-        # convert Hz to DAC codes, with sigma-delta and slew limit
-        targetLsb = fHz / self.hzPerLsb + self.fracLsb
-        deltaCode = int(round(targetLsb))
-
-        if deltaCode > self.maxCodesPerStep:
-            deltaCode = self.maxCodesPerStep
-        elif deltaCode < -self.maxCodesPerStep:
-            deltaCode = -self.maxCodesPerStep
-
-        self.fracLsb = targetLsb - float(deltaCode)
-
-        newCode = self.code + deltaCode
-
-        # clamp to rails; drop carry if clamped
-        if newCode < self.codeMin:
-            newCode = self.codeMin
-            self.fracLsb = 0.0
-        elif newCode > self.codeMax:
-            newCode = self.codeMax
-            self.fracLsb = 0.0
-
-        self.code = newCode
-        return self.code, False
+        # ramp phase: move toward codeZero with a gentle slew, then finish
+        if self.codeZero is not None:
+            target = int(round(self.codeZero))
+            if target > self.code:
+                self.code = clampInt(self.code + min(self.rampCodesPerStep, target - self.code), self.codeMin, self.codeMax)
+            elif target < self.code:
+                self.code = clampInt(self.code - min(self.rampCodesPerStep, self.code - target), self.codeMin, self.codeMax)
+            # when close enough, finish
+            if abs(self.code - target) <= 1:
+                self.code = clampInt(target, self.codeMin, self.codeMax)
+                self.done = True
+                return self.code, True
+            return self.code, False
+        else:
+            # no estimate yet; just hold for one tick
+            self.done = True
+            return self.code, True

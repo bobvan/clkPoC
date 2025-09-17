@@ -66,5 +66,55 @@ class TestTsArith(unittest.TestCase):
         out = big.divide(2)
         self.assertEqual(out.toPicoseconds(), 10**18 // 2)
 
+    def testOperatorAbs(self) -> None:
+        pos = Ts.fromParts(1, 0)
+        neg = Ts.fromParts(-1, 0)
+        self.assertEqual(abs(pos).toPicoseconds(), pos.toPicoseconds())
+        self.assertEqual(abs(neg).toPicoseconds(), pos.toPicoseconds())
+        zero = Ts.fromPicoseconds(0)
+        self.assertEqual(abs(zero).toPicoseconds(), 0)
+
+    def testOperatorAddSub(self) -> None:
+        a = Ts.fromParts(1, 500_000_000_000)
+        b = Ts.fromParts(2, 250_000_000_000)
+        added = a + b
+        self.assertIsInstance(added, Ts)
+        self.assertEqual(added.toPicoseconds(), a.toPicoseconds() + b.toPicoseconds())
+        sub = b - a
+        self.assertIsInstance(sub, Ts)
+        self.assertEqual(sub.toPicoseconds(), b.toPicoseconds() - a.toPicoseconds())
+        with self.assertRaises(TypeError):
+            _ = a + 1  # type: ignore[operator]
+        with self.assertRaises(TypeError):
+            _ = a - 1  # type: ignore[operator]
+
+    def testOperatorMulDiv(self) -> None:
+        threePs = Ts.fromPicoseconds(3)
+        scaled = threePs * 2
+        self.assertEqual(scaled.toPicoseconds(), 6)
+        scaledFloat = threePs * 0.5
+        self.assertEqual(scaledFloat.toPicoseconds(), 2)
+        divInt = threePs / 2
+        self.assertIsInstance(divInt, Ts)
+        self.assertEqual(divInt.toPicoseconds(), 2)
+        divFloat = threePs / 0.5
+        self.assertEqual(divFloat.toPicoseconds(), 6)
+        ratio = threePs / Ts.fromPicoseconds(1)
+        self.assertEqual(ratio, 3.0)
+        with self.assertRaises(TypeError):
+            _ = threePs * Ts.fromPicoseconds(1)  # type: ignore[operator]
+        with self.assertRaises(TypeError):
+            _ = threePs / "bad"  # type: ignore[arg-type]
+
+    def testComparisons(self) -> None:
+        earlier = Ts.fromParts(1, 0)
+        later = Ts.fromParts(1, 1)
+        self.assertLess(earlier, later)
+        self.assertLessEqual(earlier, later)
+        self.assertLessEqual(earlier, earlier)
+        self.assertGreater(later, earlier)
+        self.assertGreaterEqual(later, earlier)
+        self.assertGreaterEqual(later, later)
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

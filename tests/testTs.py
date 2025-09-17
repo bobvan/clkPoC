@@ -127,3 +127,17 @@ def test_toDecimal(frac_digs: int, units_per_second: int):
 
     with pytest.raises(ValueError, match="places must be between 0 and"):
         ts.toDecimal(frac_digs + 1)
+
+
+def test_comparison_operators() -> None:
+    earlier = Ts.fromParts(1, 0)
+    later = Ts.fromParts(1, 1)
+    assert earlier < later
+    assert earlier <= later
+    assert earlier <= earlier
+    assert later > earlier
+    assert later >= earlier
+    assert later >= later
+    with pytest.raises(TypeError):
+        _ = earlier < 1  # type: ignore[operator]
+

@@ -1,14 +1,14 @@
 from enum import Enum
 from typing import TypedDict
 
-from .tsTypes import Ts
+from .tsTypes import Ts  # XXX this looks questionable
 
 
 class Mode(Enum):
-    idle = 0
-    disciplining = 1
-    holdover = 2
-    fault = 3
+    Startup = 0
+    Step = 1
+    CoarseTune = 2
+    FineTune = 3
 
 
 class Health(TypedDict):
@@ -19,7 +19,7 @@ class Health(TypedDict):
 
 class State:
     def __init__(self) -> None:
-        self.mode: Mode = Mode.idle
+        self.mode: Mode = Mode.Startup
         self.dacVal: int = 0
         self.lastDscDev: Ts | None = None
         self.health: Health = {"sat": 0, "f9tOk": False, "ticOk": False}

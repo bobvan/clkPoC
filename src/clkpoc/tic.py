@@ -22,8 +22,7 @@ class TicState(Enum):
 
 
 class TIC:
-    def __init__(self, eventBus: asyncio.Queue[Any], port: str, baud: int):
-        self.eventBus = eventBus
+    def __init__(self, port: str, baud: int):
         self.port = port
         self.baud = baud
         self.ticState = TicState.startup
@@ -123,7 +122,6 @@ class TIC:
 #                print("got TIC data", ticTs)
                 self.ppsPub(ticTs, chan)
                 # sample = {"ppsErrorNs": 123}  # placeholder
-                # await eventBus.put(Event(nowNs(), "tic", "ppsSample", sample))
                 # await asyncio.sleep(1.0)
         finally:
             self.dog.stop()

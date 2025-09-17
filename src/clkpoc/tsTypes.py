@@ -48,6 +48,7 @@ class Ts:
         ns = time.time_ns()
         return cls(units = ns * 10 ** (cls.fracDigs - 9))
 
+    # XXX should review in light of dunder methods below
     # When we want a dimensionless quantity
     def toUnits(self) -> int:
         return self.units
@@ -60,9 +61,11 @@ class Ts:
         s, f = divmod(self.units, type(self).unitsPerSecond)
         return int(s), int(f)  # 0 <= f < unitsPerSecond
 
+    # XXX Deprecated; use dunder methods instead
     def add(self: Self, other: Self) -> Self:
         return type(self)(self.units + other.units)
 
+    # XXX Deprecated; use dunder methods instead
     def subFrom(self: Self, minuend: Self) -> Self:
         return type(self)(minuend.units - self.units)
 
@@ -81,6 +84,7 @@ class Ts:
             q += 1 if num >= 0 else -1
         return int(q)
 
+    # XXX Deprecated; use dunder methods instead
     @overload
     def multiply(self: Self, factor: int) -> Self:
         ...
@@ -106,6 +110,7 @@ class Ts:
         q = self.roundQuotientToEven(self.units * n, d)
         return type(self)(q)
 
+    # XXX Deprecated; use dunder methods instead
     @overload
     def divide(self: Self, value: int) -> Self:
         ...
@@ -168,6 +173,69 @@ class Ts:
         if places == 0:
             return f"{sign}{whole}"
         return f"{sign}{whole}.{digits:0{places}d}"
+
+    def __abs__(self) -> Self:
+        return type(self)(abs(self.units))
+
+    def __add__(self, other: object) -> Self:
+        if isinstance(other, Ts):
+            return type(self)(self.units + other.units)
+        return NotImplemented
+
+    def __radd__(self, other: object) -> Self:
+        if isinstance(other, Ts):
+            return type(self)(other.units + self.units)
+        return NotImplemented
+
+    def __sub__(self, other: object) -> Self:
+        if isinstance(other, Ts):
+            return type(self)(self.units - other.units)
+        return NotImplemented
+
+    def __rsub__(self, other: object) -> Self:
+        if isinstance(other, Ts):
+            return type(self)(other.units - self.units)
+        return NotImplemented
+
+    def __mul__(self, other: object) -> Self:
+        if isinstance(other, int | float):
+            return self.multiply(other)
+        return NotImplemented
+
+    def __rmul__(self, other: object) -> Self:
+        if isinstance(other, int | float):
+            return self.multiply(other)
+        return NotImplemented
+
+    def __truediv__(self, other: object) -> Self | float:
+        if isinstance(other, int | float | Ts):
+            return self.divide(other)
+        return NotImplemented
+
+    def __rtruediv__(self, other: object) -> float:
+        if isinstance(other, Ts):
+            return other.divide(self)
+        return NotImplemented
+
+    def __lt__(self, other: object) -> bool:
+        if isinstance(other, Ts):
+            return self.units < other.units
+        return NotImplemented
+
+    def __le__(self, other: object) -> bool:
+        if isinstance(other, Ts):
+            return self.units <= other.units
+        return NotImplemented
+
+    def __gt__(self, other: object) -> bool:
+        if isinstance(other, Ts):
+            return self.units > other.units
+        return NotImplemented
+
+    def __ge__(self, other: object) -> bool:
+        if isinstance(other, Ts):
+            return self.units >= other.units
+        return NotImplemented
 
     def __str__(self) -> str:
         return self.toDecimal(self.fracDigs)
