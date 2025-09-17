@@ -4,9 +4,9 @@ import asyncio
 import os
 import sys
 import termios
+from collections.abc import Callable
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Callable, Dict, List
 
 LOWER_BOUND = 0
 UPPER_BOUND = 65_535
@@ -17,7 +17,7 @@ def clamp(value: int) -> int:
     return max(LOWER_BOUND, min(UPPER_BOUND, value))
 
 
-def build_delta_map() -> Dict[str, int]:
+def build_delta_map() -> dict[str, int]:
     pairs = [
         (-1, {"f", "g", "r", "t", "v", "b"}),
         (-10, {"d", "e", "c"}),
@@ -28,7 +28,7 @@ def build_delta_map() -> Dict[str, int]:
         (100, {"l", "o", "."}),
         (1000, {"p", ";", "/"}),
     ]
-    mapping: Dict[str, int] = {}
+    mapping: dict[str, int] = {}
     for amount, keys in pairs:
         for key in keys:
             mapping[key] = amount
@@ -56,10 +56,9 @@ class ValueController:
     value: int = INITIAL_VALUE
     on_change: Callable[[int], None] | None = None
     on_trigger: Callable[[], None] | None = None
-    _digits: List[str] = field(default_factory=list)
-    _delta_map: Dict[str, int] = field(default_factory=build_delta_map)
+    _digits: list[str] = field(default_factory=list)
+    _delta_map: dict[str, int] = field(default_factory=build_delta_map)
     _queue: asyncio.Queue[str] = field(default_factory=asyncio.Queue)
-    _printing_task: asyncio.Task[None] | None = None
 
     def start(self) -> None:
         fd = sys.stdin.fileno()
@@ -68,25 +67,14 @@ class ValueController:
     def stop(self) -> None:
         fd = sys.stdin.fileno()
         self.loop.remove_reader(fd)
-        if self._printing_task and not self._printing_task.done():
-            self._printing_task.cancel()
 
     def _on_stdin_ready(self) -> None:
         ch = os.read(sys.stdin.fileno(), 1)
         if ch:
             self._queue.put_nowait(ch.decode(errors="ignore"))
 
-    async def _printer(self) -> None:
-        try:
-            while True:
-                print(self.value)
-                await asyncio.sleep(1)
-        except asyncio.CancelledError:
-            pass
-
     async def run(self) -> None:
         self.start()
-        self._printing_task = asyncio.create_task(self._printer())
         try:
             while True:
                 ch = await self._queue.get()

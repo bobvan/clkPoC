@@ -3,45 +3,21 @@
 from __future__ import annotations
 
 import asyncio
-import os
 import sys
 import termios
+from collections import deque
 from contextlib import contextmanager
-from dataclasses import dataclass, field
 
+from clkpoc.dev.valueController import ValueController
 from clkpoc.df.pairPps import PairPps
 from clkpoc.dsc import Dsc
 from clkpoc.f9t import F9T
 from clkpoc.phaseStep import PhaseStep
+from clkpoc.rollingMean import RollingMean
 from clkpoc.tic import TIC
-from clkpoc.tsTypes import PairTs
+from clkpoc.tsTypes import PairTs, Ts
 
-LOWER_BOUND = 0
-UPPER_BOUND = 65_535
-INITIAL_VALUE = 13_200
-
-
-def clamp(value: int) -> int:
-    return max(LOWER_BOUND, min(UPPER_BOUND, value))
-
-
-def build_delta_map() -> dict[str, int]:
-    pairs = [
-        (-1, {"f", "g", "r", "t", "v", "b"}),
-        (-10, {"d", "e", "c"}),
-        (-100, {"s", "w", "x"}),
-        (-1000, {"a", "q", "z"}),
-        (1, {"h", "j", "y", "u", "n", "m"}),
-        (10, {"k", "i", ","}),
-        (100, {"l", "o", "."}),
-        (1000, {"p", ";", "/"}),
-    ]
-    mapping: dict[str, int] = {}
-    for amount, keys in pairs:
-        for key in keys:
-            mapping[key] = amount
-            mapping[key.upper()] = amount
-    return mapping
+INITIAL_DAC = 13_200
 
 
 @contextmanager
@@ -58,79 +34,94 @@ def raw_stdin() -> None:
         print()  # keep shell prompt tidy
 
 
-@dataclass
-class ValueController:
-    loop: asyncio.AbstractEventLoop
-    value: int = INITIAL_VALUE
-    _digits: list[str] = field(default_factory=list)
-    _delta_map: dict[str, int] = field(default_factory=build_delta_map)
-    _queue: asyncio.Queue[str] = field(default_factory=asyncio.Queue)
-    _phaseStep = None # PhaseStep instance created below as needed
-
-    def getValue(self) -> int:
-        return self.value
-
-    def start(self) -> None:
-        fd = sys.stdin.fileno()
-        self.loop.add_reader(fd, self._on_stdin_ready)
-
-    def stop(self) -> None:
-        fd = sys.stdin.fileno()
-        self.loop.remove_reader(fd)
-
-    def _on_stdin_ready(self) -> None:
-        ch = os.read(sys.stdin.fileno(), 1)
-        if ch:
-            self._queue.put_nowait(ch.decode(errors="ignore"))
-
-    async def run(self) -> None:
-        self.start()
-        try:
-            while True:
-                ch = await self._queue.get()
-                if ch in ("\x03", "\x04"):  # Ctrl+C, Ctrl+D
-                    raise asyncio.CancelledError
-                if ch.isdigit():
-                    self._digits.append(ch)
-                    continue
-
-                if self._digits:
-                    self.value = clamp(int("".join(self._digits)))
-                    self._digits.clear()
-
-                if ch in ("\r", "\n"):
-                    continue
-
-                if ch in (" ", "\t"):
-                    _phaseStep = PhaseStep()
-
-                delta = self._delta_map.get(ch)
-                if delta is not None:
-                    self.value = clamp(self.value + delta)
-        finally:
-            self.stop()
-
-globalController: ValueController = None # XXX hacky
-globalDsc: Dsc = None # XXX hacky
-
-def onPairPps(pair: PairTs) -> None:
-    # Get deviation of Dsc PPS from Gns PPS timestamp on reference timescale
-    dscDev = pair.dscTs.refTs - pair.gnsTs.refTs
-    dscDevNs = dscDev.toPicoseconds()/1e3
-    setVal = globalController.getValue()
-    print(f"dscDev {dscDevNs:5.1f}ns, value {setVal}")
-    globalDsc.writeDac(setVal)
-
 async def run_manual_tune() -> None:
+
+    def fitSlopePerSec(ys: list[float]) -> float:
+        """Least-squares slope dy/dt using x = 0,1,2,..., ts=1s spacing (then scale by ts)."""
+        n = len(ys)
+        if n < 2:
+            return 0.0
+        xMean = (n - 1) / 2.0
+        yMean = sum(ys) / float(n)
+        sxx = 0.0
+        sxy = 0.0
+        for i, y in enumerate(ys):
+            dx = i - xMean
+            dy = y - yMean
+            sxx += dx * dx
+            sxy += dx * dy
+        if sxx == 0.0:
+            return 0.0
+        slopePerSample = sxy / sxx
+        return slopePerSample
+
+    def showTune() -> None:
+        nonlocal dscDev, lastDscDev, dac, lastDac, errHist, f0Hz, hzPerLsb
+        dscDevNs = dscDev.toPicoseconds() / 1e3
+        if lastDscDev is None or dscDev is None:
+            dscDevDeltaNs = 0.0
+        else:
+            dscDevDelta = dscDev - lastDscDev
+            dscDevDeltaNs = dscDevDelta.toPicoseconds() / 1e3
+
+        # estimate frequency from LS slope of phase
+        if len(errHist) >= 3:
+            slope = fitSlopePerSec(list(errHist))   # seconds/second
+            freqEstHz = -f0Hz * slope               # Hz
+            # compute zero-frequency code from current code and freq estimate
+            codeZero = float(dac) - (freqEstHz / hzPerLsb)
+
+        ffePpb = f"FFE {ffePpbRm15:8.3f}" if ffePpbRm15 is not None else "FFE ------"
+        print(f"dscDev {dscDevDeltaNs:+5.1f}Δ to {dscDevNs:5.1f}ns, {ffePpb} PPB, "
+              f"DAC {dac-lastDac:+5d}Δ to {dac}, "
+              f"codeZero {codeZero if 'codeZero' in locals() else 0.0:8.1f}")
+        lastDscDev, lastDac = dscDev, dac
+
+    def onNewVal(val: int) -> None:
+        nonlocal dac
+        dac = val
+        showTune()
+        if dsc is not None:
+            dsc.writeDac(val)
+
+    def onPairPps(pair: PairTs) -> None:
+        nonlocal dscDev, lastPair, ffeRm15, ffePpbRm15, errHist
+        # Get deviation of Dsc PPS from Gns PPS timestamp on reference timescale
+        dscDev = pair.dscTs.refTs - pair.gnsTs.refTs
+
+        errHist.append(dscDev.toPicoseconds()*1e-12)
+
+        # XXX This should be in its own dataflow someday
+        if lastPair is not None:
+            # Gns time interval since last pair
+            gnsTi = pair.gnsTs.refTs-lastPair.gnsTs.refTs
+            dscTi = pair.dscTs.refTs-lastPair.dscTs.refTs
+            # Get fractional frequency error in parts per billion
+            assert gnsTi != 0.0, "Zero gnsTi in onPairPps"
+            ffePpb = 1e9*(dscTi-gnsTi)/gnsTi
+            ffePpbRm15 = ffeRm15.add(ffePpb)
+        lastPair = pair
+
+        showTune()
+
+    def onTrigger() -> None:
+        PhaseStep()
+
+    dscDev: Ts | None = None
+    lastDscDev: Ts | None = None
+    dac: int = INITIAL_DAC
+    lastDac: int = INITIAL_DAC
+    win: int = 7 # typ 5-9
+    errHist: deque[float] = deque(maxlen=win)
+    f0Hz: float = 10e6
+    hzPerLsb = -4.2034700315e-05   # Hz per code, from measurement
+    lastPair: PairTs | None = None
+    ffeRm15 = RollingMean(3)  # rolling mean of fractional freq error in ppb
+    ffePpbRm15: float | None = None
+
     loop = asyncio.get_running_loop()
-
-    controller = ValueController(loop)
-    global globalController # XXX hacky
-    globalController = controller
-
+    controller = ValueController(loop, value=dac, on_change=onNewVal, on_trigger=onTrigger)
     dsc = Dsc()
-    global globalDsc # XXX hacky
-    globalDsc = dsc
 
     f9t = F9T(
         "/dev/serial/by-id/usb-u-blox_AG_-_www.u-blox.com_u-blox_GNSS_receiver-if00", 9600)
@@ -150,6 +141,7 @@ async def run_manual_tune() -> None:
         for task in tasks:
             task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
+
 
 if __name__ == "__main__":
     with raw_stdin():
