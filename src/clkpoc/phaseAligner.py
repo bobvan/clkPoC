@@ -114,7 +114,9 @@ class PhaseAlignerDirect:
         else:
             self.inGoalStreak = 0
 
-        print(f"PhaseAligner: reached {self.phaseReached}, err {errSec*1e9:8.1f} ns, f_est {self.freqEstHz:8.1f} Hz, code {self.code:5d}, code0 {self.codeZero if self.codeZero is not None else 'N/A':8}")
+        print(f"PhaseAligner: reached {self.phaseReached}, err {errSec*1e9:8.1f} ns, "
+              f"f_est {self.freqEstHz:8.1f} Hz, code {self.code:5d}, "
+              f"code0 {self.codeZero if self.codeZero is not None else 'N/A':8}")
         if not self.phaseReached:
             # still in shove phase
             yPpb = self.maxPpb if errSec > 0.0 else (-self.maxPpb)  # speed up if late
@@ -135,9 +137,11 @@ class PhaseAlignerDirect:
         if self.codeZero is not None:
             target = int(round(self.codeZero))
             if target > self.code:
-                self.code = clampInt(self.code + min(self.rampCodesPerStep, target - self.code), self.codeMin, self.codeMax)
+                self.code = clampInt(self.code + min(self.rampCodesPerStep, target - self.code),
+                    self.codeMin, self.codeMax)
             elif target < self.code:
-                self.code = clampInt(self.code - min(self.rampCodesPerStep, self.code - target), self.codeMin, self.codeMax)
+                self.code = clampInt(self.code - min(self.rampCodesPerStep, self.code - target),
+                    self.codeMin, self.codeMax)
             # when close enough, finish
             if abs(self.code - target) <= 1:
                 self.code = clampInt(target, self.codeMin, self.codeMax)

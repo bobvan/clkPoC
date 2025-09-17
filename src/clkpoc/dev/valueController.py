@@ -6,7 +6,7 @@ import sys
 import termios
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Dict, List
+from typing import Callable, Dict, List
 
 LOWER_BOUND = 0
 UPPER_BOUND = 65_535
@@ -54,6 +54,8 @@ def raw_stdin() -> None:
 class ValueController:
     loop: asyncio.AbstractEventLoop
     value: int = INITIAL_VALUE
+    on_change: Callable[[int], None] | None = None
+    on_trigger: Callable[[], None] | None = None
     _digits: List[str] = field(default_factory=list)
     _delta_map: Dict[str, int] = field(default_factory=build_delta_map)
     _queue: asyncio.Queue[str] = field(default_factory=asyncio.Queue)
@@ -95,17 +97,29 @@ class ValueController:
                     continue
 
                 if self._digits:
-                    self.value = clamp(int("".join(self._digits)))
+                    self._apply_new_value(clamp(int("".join(self._digits))))
                     self._digits.clear()
 
                 if ch in ("\r", "\n"):
                     continue
 
+                if ch in (" ", "\t"):
+                    if self.on_trigger:
+                        self.on_trigger()
+                    continue
+
                 delta = self._delta_map.get(ch)
                 if delta is not None:
-                    self.value = clamp(self.value + delta)
+                    self._apply_new_value(clamp(self.value + delta))
         finally:
             self.stop()
+
+    def _apply_new_value(self, new_value: int) -> None:
+        if new_value == self.value:
+            return
+        self.value = new_value
+        if self.on_change:
+            self.on_change(new_value)
 
 
 async def main() -> None:

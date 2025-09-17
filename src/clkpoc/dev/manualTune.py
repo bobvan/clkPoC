@@ -8,12 +8,13 @@ import sys
 import termios
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Dict, List
-from clkpoc.f9t import F9T
-from clkpoc.tic import TIC
+
 from clkpoc.df.pairPps import PairPps
-from clkpoc.phaseStep import PhaseStep
 from clkpoc.dsc import Dsc
+from clkpoc.f9t import F9T
+from clkpoc.phaseStep import PhaseStep
+from clkpoc.tic import TIC
+from clkpoc.tsTypes import PairTs
 
 LOWER_BOUND = 0
 UPPER_BOUND = 65_535
@@ -24,7 +25,7 @@ def clamp(value: int) -> int:
     return max(LOWER_BOUND, min(UPPER_BOUND, value))
 
 
-def build_delta_map() -> Dict[str, int]:
+def build_delta_map() -> dict[str, int]:
     pairs = [
         (-1, {"f", "g", "r", "t", "v", "b"}),
         (-10, {"d", "e", "c"}),
@@ -35,7 +36,7 @@ def build_delta_map() -> Dict[str, int]:
         (100, {"l", "o", "."}),
         (1000, {"p", ";", "/"}),
     ]
-    mapping: Dict[str, int] = {}
+    mapping: dict[str, int] = {}
     for amount, keys in pairs:
         for key in keys:
             mapping[key] = amount
@@ -61,8 +62,8 @@ def raw_stdin() -> None:
 class ValueController:
     loop: asyncio.AbstractEventLoop
     value: int = INITIAL_VALUE
-    _digits: List[str] = field(default_factory=list)
-    _delta_map: Dict[str, int] = field(default_factory=build_delta_map)
+    _digits: list[str] = field(default_factory=list)
+    _delta_map: dict[str, int] = field(default_factory=build_delta_map)
     _queue: asyncio.Queue[str] = field(default_factory=asyncio.Queue)
     _phaseStep = None # PhaseStep instance created below as needed
 
@@ -81,14 +82,6 @@ class ValueController:
         ch = os.read(sys.stdin.fileno(), 1)
         if ch:
             self._queue.put_nowait(ch.decode(errors="ignore"))
-
-    async def _printer(self) -> None:
-        try:
-            while True:
-                print(self.value)
-                await asyncio.sleep(1)
-        except asyncio.CancelledError:
-            pass
 
     async def run(self) -> None:
         self.start()
