@@ -23,7 +23,8 @@ class PhaseWatch:
     # XXX Maybe rename to PhaseThresh? or PhaseLimit?
 
     def __init__(self, pairPps: PairPps, state: State,
-        coarseThresh: float = 410e-9, fineThresh: float = 20e-9) -> None:
+        # CoarseThresh padded slightly over the 400 ns expected dscDev after a step
+        coarseThresh: float = 510e-9, fineThresh: float = 20e-9) -> None:
         """
         pairPps: the PairPps instance publisher
         state: the State instance to update mode

@@ -2,6 +2,15 @@
 """
 Control ARM pin on TADD-2 Mini for Raspberry Pi CM5 using libgpiod.
 
+Holding the ARM pin low for more than a second causes the divider to
+restart from zer on the next SYNC PPS, which is coming from the GNSS
+receiver. This is used to step the phase of the DSC PPS into coarse
+alignment with GNSS.
+
+It make take up to four cycles of the nominal 10 MHz disciplined
+oscillator frequency, or 400 ns, for the first PPS out of the divider.
+Thus DSC PPS will lag GNSS PPS by up to 400 ns after arming.
+
 Provides a small helper to initialize BCM GPIO 16 as an output and
 issue an active-low pulse to trigger the TADD ARM input.
 

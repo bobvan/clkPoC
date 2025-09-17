@@ -1,7 +1,6 @@
 import asyncio
 import logging
 from collections.abc import Awaitable, Callable
-from typing import Any
 
 import serial_asyncio as serialAsyncio
 from pynmeagps import NMEAMessage, NMEAReader

@@ -3,7 +3,6 @@ import contextlib
 import re
 import termios
 from enum import Enum
-from typing import Any
 
 import serial_asyncio as serialAsyncio
 
