@@ -2,6 +2,12 @@
 
 ## Timescales
 
+Every clock is bound to a timescale for counting its ticks.
+Thus referencing a "timestamp taken on a clock" implies that the
+timestamp was taken on the clock's timescale.
+This shorthand is most often used with the reference oscillator and
+capture (host) clocks.
+
 ### GNSS
 
 * Abbreviated "GNS", "gns", or "Gns" in identifiers
@@ -31,6 +37,8 @@
 * Abbreviated "CAP", "cap", or "Cap" in identifiers
 * Host clock when timestamp was captured
 * Likely UTC, but could be steered or even discontinuous due to host time daemon action
+  * Hence unsuitable for long-term observation
+  * Limtitations judged acceptable for the convenience of a human-relatable scale
 
 ## Messaging
 

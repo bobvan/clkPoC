@@ -6,13 +6,14 @@ from smbus2 import SMBus
 # Control Disciplined Oscillator (DSC) via I2C using AD5693R DAC
 class Dsc:
     def __init__(self,
-            busNum: int = 1, addr: int = 0x4C, gain: int = 1):
+            busNum: int = 1, addr: int = 0x4C, gain: int = 1, valInit: int = 9611) -> None:
         self.busNum = busNum
         self.addr = addr
         self.bus = SMBus(busNum)
         self.gain = gain
         self.writeControl(self.gain)
-        self.writeDac(13200)  # mid-scale on startup
+        self.writeDac(valInit)
+        self.value = valInit
 
     @unique
     class CommandBytes(IntEnum):
@@ -36,11 +37,13 @@ class Dsc:
         )
 #        print(f"DSC: wrote DAC value {value} (0x{value:04X})")
 
+    # XXX I don't think this works. Sometimes seems to give old values.
     def readDac(self) -> int:
-        # Read back the DAC register (2 bytes)
-        data = self.bus.read_i2c_block_data(self.addr, 0x00, 2)
-        value = (data[0] << 8) | data[1]
-        return value
+        return self.value
+#        # Read back the DAC register (2 bytes)
+#        data = self.bus.read_i2c_block_data(self.addr, 0x00, 2)
+#        value = (data[0] << 8) | data[1]
+#        return value
 
     def writeControl(self, gain: int = 1) -> None:
         # Control register bits are sent in the upper 5 bits of the first data byte:

@@ -307,6 +307,9 @@ class Ts:
         return f"{base}.{fracDigits:0{places}d}{suffix}"
 
     def elapsedStr(self) -> str:
+        if self.toPicoseconds() < 1_000_000:
+            # reasonable number of nanos
+            return f"{self.toPicoseconds()/1e3:6.1f} ns"
         return self.toDecimal() + 's'
 
     def isoUtc(self, places: int = fracDigs) -> str:
@@ -335,20 +338,35 @@ class Ts:
         # unambiguous developer form (great for logs with %r)
         return f"Ts(units={self.units})"
 
+# A single-channel timestamp from the TIC, including when the host captured it.
 @dataclass(frozen=True)
 class TicTs:
-    refTs: Ts  # Event timestamp on TIC's reference clock
-    capTs: Ts  # Event timestamp capture time on host clock
+    refTs: Ts  # PPS timestamp on TIC's reference clock
+    capTs: Ts  # PPS timestamp capture time on host clock
 
     def __str__(self) -> str:
         return f"cap {self.capTs:L} tic {self.refTs:E}"
 
 
-# Paired up timestamps from GNSS PPS and disciplined oscillator PPS for same UTC second
+# A two-channel pair of timestamps from the TIC, including when the host captured each.
+# Carries timestamps from GNSS PPS and disciplined oscillator PPS for same UTC second.
 @dataclass(frozen=True)
 class PairTs:
-    gnsTs: TicTs
-    dscTs: TicTs
+    gnsTs: TicTs  # GNSS PPS, possibly with quantization error correction applied
+    dscTs: TicTs  # Disciplined oscillator PPS
 
     def __str__(self) -> str:
         return f"gns {self.gnsTs} dsc {self.dscTs}"
+
+
+# This isn't quite a timestamp like TicTs, but Ts is good for representing the quantization error,
+# since it'll be added to the actual TIC timestamp to get the corrected GNSS PPS timestamp.
+# The meessage capture time on host clock is just as with TicTs.
+@dataclass(frozen=True)
+class QerrTs:
+    qErr : Ts  # Quantization Error from TIM-TP message
+    capTs: Ts  # TIM-TP message capture time on host clock
+
+
+    def __str__(self) -> str:
+        return f"cap {self.capTs:L} qErr {self.qErr}"

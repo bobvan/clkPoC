@@ -10,6 +10,7 @@ from contextlib import contextmanager
 
 from clkpoc.dev.valueController import ValueController
 from clkpoc.df.pairPps import PairPps
+from clkpoc.df.pairQerr import PairQerr
 from clkpoc.dsc import Dsc
 from clkpoc.f9t import F9T
 from clkpoc.phaseStep import PhaseStep
@@ -127,8 +128,9 @@ async def run_manual_tune() -> None:
         "/dev/serial/by-id/usb-u-blox_AG_-_www.u-blox.com_u-blox_GNSS_receiver-if00", 9600)
     tic = TIC(
         "/dev/serial/by-id/usb-Arduino__www.arduino.cc__0042_95037323535351803130-if00", 115200)
-    pairPps = PairPps(tic, "ppsGnsOnRef", "ppsDscOnRef")
-    pairPps.pub.sub("pairPps", onPairPps)
+    pairPps  = PairPps(tic, "ppsGnsOnRef", "ppsDscOnRef")
+    pairQerr = PairQerr(pairPps, f9t, "pairPps", "TIM-TP")
+    pairQerr.pub.sub("pairQerr", onPairPps)
 
     tasks = [
         asyncio.create_task(controller.run(), name="value-controller"),

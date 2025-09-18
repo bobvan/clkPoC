@@ -1,14 +1,16 @@
 # XXX Maybe make this coarsePhaseWatch.py?
 import logging
 
-from clkpoc.df.pairPps import PairPps
+from clkpoc.df.pairQerr import PairQerr
 from clkpoc.dsc import Dsc
-from clkpoc.phaseAligner import PhaseAlignerDirect
+from clkpoc.phaseAligner import PhaseAligner
 from clkpoc.phaseStep import PhaseStep
 from clkpoc.state import Mode, State
 from clkpoc.tsTypes import PairTs, Ts
 
 
+# XXX get consistent on alignment / tuning
+# XXX also need a RefWatch to monitor the reference oscillator frequency against GNSS
 class PhaseWatch:
     """
     Subscribe to PairPps 'pairPps' topic and watch for
@@ -22,14 +24,14 @@ class PhaseWatch:
     """
     # XXX Maybe rename to PhaseThresh? or PhaseLimit?
 
-    def __init__(self, pairPps: PairPps, state: State,
+    def __init__(self, pairQerr: PairQerr, state: State,
         # CoarseThresh padded slightly over the 400 ns expected dscDev after a step
         coarseThresh: float = 510e-9, fineThresh: float = 20e-9) -> None:
         """
         pairPps: the PairPps instance publisher
         state: the State instance to update mode
         """
-        self.pairPps = pairPps
+        self.pairQerr = pairQerr
         self.state = state
         assert self.state.mode == state.mode.Startup, "PhaseWatch should be started in Startup mode"
 
@@ -37,24 +39,25 @@ class PhaseWatch:
         self.coarseThresh = Ts.fromFloat(coarseThresh)
         self.fineThresh   = Ts.fromFloat(  fineThresh)
 
-        # Subscribe to the PairPps publisher for paired PPS events
-        pairPps.pub.sub("pairPps", self.onPairPps)
+        # Subscribe to a PairPps publisher for paired PPS events
+        #pairPps.pub.sub("pairPps", self.onPairPps)
+        pairQerr.pub.sub("pairQerr", self.onPairPps)
 
         self.phaseStep = None # PhaseStep instance created below as needed
         self.dsc = Dsc()
 
         f0Hz = 10_000_000.0
-        hzPerLsb = -4.2034700315e-05   # Hz per code
-        self.coarseTuner = PhaseAlignerDirect(
-            f0Hz=f0Hz,
-            hzPerLsb=hzPerLsb,
-            codeMin=11400,
-            codeMax=15000,
-            codeInit=13200,
-            maxPpb=20.0,         # your VCO pull (ppb)
-            goalNs=25.0,         # handoff threshold
-            sampleTime=1.0,
-            holdCount=2,
+        hzPerLsb = -0.0057   # Hz per code from aux/fitKv.py and measurement
+        self.coarseTuner = PhaseAligner(
+            f0_hz=f0Hz,
+            hz_per_lsb=hzPerLsb,
+            code_min=11400,
+            code_max=15000,
+            code_init=9611,
+            max_ppb=20.0,
+            goal_ns=25.0,
+            sample_time=1.0,
+            hold_count=2,
         )
 
         self.clinkers = 0

@@ -7,6 +7,8 @@ from pynmeagps import NMEAMessage, NMEAReader
 from pyubx2 import UBXMessage, UBXReader
 
 from clkpoc.quietWatch import QuietWatch
+from clkpoc.topicPublisher import TopicPublisher
+from clkpoc.tsTypes import QerrTs, Ts
 
 # Handler type aliases
 UbxHandler = Callable[[UBXMessage, bytes], Awaitable[None]]
@@ -17,11 +19,13 @@ class F9T:
         self.port = port
         self.baud = baud
         self.dog = QuietWatch(name="F9T")
+        self.pub = TopicPublisher("f9t", warnIfSlowMs=10.0)
 
     async def ubxPrinter(self, msg: UBXMessage, raw: bytes) -> None:
         # Example: show message identity and iTOW if present
-        itow = getattr(msg, "iTOW", None)
-        print("UBX", msg.identity, itow)
+        #itow = getattr(msg, "iTOW", None)
+        # print("UBX", msg.identity, itow)
+        pass
 
     async def nmeaPrinter(self, msg: NMEAMessage, raw: bytes) -> None:
         # Example: show talker+msg type
@@ -43,10 +47,24 @@ class F9T:
         RTCM3 frames are discarded when dropRtcm is True.
         """
         # bind defaults to *this instance* when not provided
-        if ubxHandler is None:
-            ubxHandler = self.ubxPrinter
-        if nmeaHandler is None:
-            nmeaHandler = self.nmeaPrinter
+        downstreamUbx = ubxHandler if ubxHandler is not None else self.ubxPrinter
+        downstreamNmea = nmeaHandler if nmeaHandler is not None else self.nmeaPrinter
+
+        async def ubxDispatch(msg: UBXMessage, raw: bytes) -> None:
+            if msg.identity == "TIM-TP":
+                if self.pub.count("TIM-TP") > 0:
+                    capTs = Ts.now()
+                    qErrTs = QerrTs(qErr=Ts.fromPicoseconds(msg.qErr), capTs=capTs)
+                    self.pub.publish("TIM-TP", qErrTs)
+            else:
+                if self.pub.count("ubxRaw") > 0:
+                    self.pub.publish("ubxRaw", {"msg": msg, "raw": raw})
+            await downstreamUbx(msg, raw)
+
+        async def nmeaDispatch(msg: NMEAMessage, raw: bytes) -> None:
+            if self.pub.count("nmeaRaw") > 0:
+                self.pub.publish("nmeaRaw", {"msg": msg, "raw": raw})
+            await downstreamNmea(msg, raw)
 
         reader, writer = await serialAsyncio.open_serial_connection(
             url=self.port, baudrate=self.baud
@@ -83,7 +101,7 @@ class F9T:
                         trimmed = rawLine.rstrip(b"\r\n")
                         try:
                             nmeaMsg = NMEAReader.parse(trimmed)
-                            await nmeaHandler(nmeaMsg, rawLine)
+                            await nmeaDispatch(nmeaMsg, rawLine)
                         except Exception as e:
                             # Bad NMEA; resync by continuing
                             print(f"A NMEA parsing error occurred: {e}")
@@ -141,7 +159,7 @@ class F9T:
                         continue
 
                     # Good UBX frame
-                    await ubxHandler(ubxMsg, rawFrame)
+                    await ubxDispatch(ubxMsg, rawFrame)
                     del buf[:frameLen]
 
         # XXX this would be the spot to catch SerialException when F9T is unplugged

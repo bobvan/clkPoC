@@ -4,6 +4,7 @@ import json
 import logging
 
 from clkpoc.df.pairPps import PairPps
+from clkpoc.df.pairQerr import PairQerr
 from clkpoc.df.phaseTrack import PhaseTrack
 from clkpoc.df.ppsCsvLog import PpsCsvLog
 from clkpoc.f9t import F9T
@@ -118,8 +119,9 @@ async def main():
     PpsCsvLog(tic, "ppsGnsOnRef", "ppsGns.csv")
     PpsCsvLog(tic, "ppsDscOnRef", "ppsDsc.csv")
     pairPps = PairPps(tic, "ppsGnsOnRef", "ppsDscOnRef")
+    pairQerr = PairQerr(pairPps, f9t, "pairPps", "TIM-TP")  # noqa: F841
     # Watch for step changes between GNSS and disciplined ref timestamps
-    PhaseWatch(pairPps, state)  # use default threshold; adjust as needed
+    PhaseWatch(pairQerr, state)  # use default threshold; adjust as needed
     PhaseTrack(pairPps, state)
     tasks = [
         asyncio.create_task(f9t.run()),
