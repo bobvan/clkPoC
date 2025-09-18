@@ -49,15 +49,14 @@ class PhaseWatch:
         f0Hz = 10_000_000.0
         hzPerLsb = -0.0057   # Hz per code from aux/fitKv.py and measurement
         self.coarseTuner = PhaseAligner(
-            f0_hz=f0Hz,
-            hz_per_lsb=hzPerLsb,
-            code_min=11400,
-            code_max=15000,
-            code_init=9611,
-            max_ppb=20.0,
-            goal_ns=25.0,
-            sample_time=1.0,
-            hold_count=2,
+            f0Hz=f0Hz,
+            hzPerLsb=hzPerLsb,
+            codeMin=7000,
+            codeMax=13000,
+            codeInit=9611,
+            maxPpb=20.0,
+            goalNs=25.0,
+            holdCount=2,
         )
 
         self.clinkers = 0
