@@ -24,7 +24,7 @@ class PhaseWatch:
     """
     # XXX Maybe rename to PhaseThresh? or PhaseLimit?
 
-    def __init__(self, pairQerr: PairQerr, state: State,
+    def __init__(self, pairQerr: PairQerr, state: State, codeInit: int,
         # CoarseThresh padded slightly over the 400 ns expected dscDev after a step
         coarseThresh: float = 510e-9, fineThresh: float = 20e-9) -> None:
         """
@@ -53,9 +53,10 @@ class PhaseWatch:
             hzPerLsb=hzPerLsb,
             codeMin=7000,
             codeMax=13000,
-            codeInit=9611,
+            codeInit=codeInit,
             maxPpb=20.0,
-            goalNs=25.0,
+            goalNs=15.0,
+            errMaxNs=500.0, # XXX this and above should come from thresholds above
             holdCount=2,
         )
 

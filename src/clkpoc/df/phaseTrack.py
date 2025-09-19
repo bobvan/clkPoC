@@ -1,4 +1,4 @@
-
+# XXX leaving this in mothballs for now
 from collections import deque
 
 from clkpoc.df.pairPps import PairPps
@@ -36,7 +36,7 @@ class PhaseTrack:
         self.ffeRm15 = RollingMean(15)  # rolling mean of fractional freq error in ppb
         # XXX consider opening up codeMin/Max
         self.pllWithFllSafe = self.PllWithFllSafe(hzPerLsb = -4.2034700315e-05,
-            codeMin=11400, codeMax=15000, codeInit=self.state.dacVal)
+            codeMin=7000, codeMax=15000, codeInit=self.state.dacVal)
 
     class PllWithFllSafe:
         def __init__(

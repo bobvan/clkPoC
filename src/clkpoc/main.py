@@ -21,6 +21,7 @@ from clkpoc.tic import TIC
 # XXX next up: Define IPC messages for TIM-TP message and TIC timestamps with host time
 # XXX next up: Clean up main.py and enable strict type checking
 
+INITIAL_DAC = 8700      # from aux/fitKv.py and measurement
 
 async def dacActor(cmdQueue):
     while True:
@@ -121,7 +122,7 @@ async def main():
     pairPps = PairPps(tic, "ppsGnsOnRef", "ppsDscOnRef")
     pairQerr = PairQerr(pairPps, f9t, "pairPps", "TIM-TP")  # noqa: F841
     # Watch for step changes between GNSS and disciplined ref timestamps
-    PhaseWatch(pairQerr, state)  # use default threshold; adjust as needed
+    PhaseWatch(pairQerr, state, codeInit=INITIAL_DAC)  # use default threshold; adjust as needed
     PhaseTrack(pairPps, state)
     tasks = [
         asyncio.create_task(f9t.run()),

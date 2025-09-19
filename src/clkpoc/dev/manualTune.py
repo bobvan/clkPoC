@@ -18,7 +18,7 @@ from clkpoc.rollingMean import RollingMean
 from clkpoc.tic import TIC
 from clkpoc.tsTypes import PairTs, Ts
 
-INITIAL_DAC = 13_200
+INITIAL_DAC = 9611      # from aux/fitKv.py and measurement
 
 
 @contextmanager
@@ -110,8 +110,6 @@ async def run_manual_tune() -> None:
 
     dscDev: Ts | None = None
     lastDscDev: Ts | None = None
-    dac: int = INITIAL_DAC
-    lastDac: int = INITIAL_DAC
     win: int = 7 # typ 5-9
     errHist: deque[float] = deque(maxlen=win)
     f0Hz: float = 10e6
@@ -120,9 +118,11 @@ async def run_manual_tune() -> None:
     ffeRm15 = RollingMean(3)  # rolling mean of fractional freq error in ppb
     ffePpbRm15: float | None = None
 
+    dsc = Dsc()
+    dac: int = dsc.readDac()
+    lastDac: int = dac
     loop = asyncio.get_running_loop()
     controller = ValueController(loop, value=dac, on_change=onNewVal, on_trigger=onTrigger)
-    dsc = Dsc()
 
     f9t = F9T(
         "/dev/serial/by-id/usb-u-blox_AG_-_www.u-blox.com_u-blox_GNSS_receiver-if00", 9600)

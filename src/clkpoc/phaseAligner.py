@@ -12,7 +12,9 @@ class PhaseAligner:
     correction such that, in the next interval, 5% of the present error would be
     cancelled. The resulting frequency delta is limited to +/-maxPpb and converted
     to DAC codes via hzPerLsb. Once a configurable number of consecutive samples
-    land inside goalNs, we report the current code and exit.
+    land inside goalNs, we report the current code and exit. Between goalNs and
+    errMaxNs we blend fractional frequency and phase corrections to stay inside
+    the desired capture range.
     """
 
     def __init__(
@@ -24,6 +26,7 @@ class PhaseAligner:
         codeInit: int,
         maxPpb: float,
         goalNs: float,
+        errMaxNs: float,
         holdCount: int = 3,
         corrFracPerStep: float = 0.05,
     ) -> None:
@@ -31,6 +34,8 @@ class PhaseAligner:
             raise ValueError("maxPpb must be positive")
         if goalNs <= 0.0:
             raise ValueError("goalNs must be positive")
+        if errMaxNs <= goalNs:
+            raise ValueError("errMaxNs must be greater than goalNs")
         if holdCount < 1:
             raise ValueError("holdCount must be >= 1")
         if not (0.0 < corrFracPerStep <= 1.0):
@@ -44,51 +49,104 @@ class PhaseAligner:
 
         self.maxPpb = maxPpb
         self.goalSec = goalNs * 1e-9
+        self.errMaxSec = errMaxNs * 1e-9
         self.holdCount = holdCount
         self.corrFracPerStep = corrFracPerStep
 
         self.inGoal = 0
         self.done = False
+        self.freqPpbGain = 1.0 # multiplier for freq correction vs phase correction SWAG
+        self.codeDeltaGain = 1.0 # multiplier for code delta SWAG
 
         # XXX rewrite to use Ts instead of float seconds?
         self.lastErrSec: float | None = None
+        self.errSec0: float | None = None
+        self.minAbsIffePpb = float('inf')  # track minimum absolute iffePpb
+        self.minIffePpbCode = self.code  # and associated code
 
     def step(self, errSec: float) -> tuple[int, bool]:
         if self.done:
             return self.code, True
 
-        if abs(errSec) <= self.goalSec:
+        if self.errSec0 is None:
+            self.errSec0 = errSec
+            # XXX testing
+            self.errMaxSec = clampInt(self.errSec0, 0, self.errMaxSec)
+
+        errMag = abs(errSec)
+
+        if errMag <= self.goalSec:
             self.inGoal += 1
         else:
             self.inGoal = 0
 
-        desired_delta = -self.corrFracPerStep * errSec
-        slope = desired_delta
-        freq_delta_hz = -self.f0Hz * slope
+        phasePpb = self.corrFracPerStep * errSec * 1e9
+        if phasePpb > self.maxPpb:
+            phasePpb = self.maxPpb
+        elif phasePpb < -self.maxPpb:
+            phasePpb = -self.maxPpb
 
-        freq_delta_ppb = (freq_delta_hz / self.f0Hz) * 1e9
-        if freq_delta_ppb > self.maxPpb:
-            freq_delta_ppb = self.maxPpb
-        elif freq_delta_ppb < -self.maxPpb:
-            freq_delta_ppb = -self.maxPpb
-
-        freq_delta_hz = self.f0Hz * freq_delta_ppb * 1e-9
-        code_delta = freq_delta_hz / self.hzPerLsb
-        self.code = clampInt(self.code + int(round(code_delta)), self.codeMin, self.codeMax)
-
+        freqPpb = 0.0
+        iffePpb: float | None = None
         if self.lastErrSec is not None:
             iffePpb = 1e9 * (errSec - self.lastErrSec)
-            print(f"PhaseAligner: err {errSec*1e9:6.1f} ns, "
-                f"freq_delta {freq_delta_hz:8.3f} Hz ({freq_delta_ppb:6.3f} ppb), "
-                f"code_delta {int(round(code_delta)):6d}, new code {self.code}, iffe {iffePpb:6.3f} ppb")  # noqa: E501
-        else:
-            print(f"PhaseAligner: err {errSec*1e9:6.1f} ns, "
-                f"freq_delta {freq_delta_hz:8.3f} Hz ({freq_delta_ppb:6.3f} ppb), "
-                f"code_delta {int(round(code_delta)):6d}, new code {self.code}")
-        self.lastErrSec = errSec
 
+            # Track minimum absolute iffePpb and associated code to restore after phase is aligned
+            absIffePpb = abs(iffePpb)
+            if absIffePpb < self.minAbsIffePpb:
+                self.minAbsIffePpb = absIffePpb
+                self.minIffePpbCode = self.code
+
+            freqPpb = -self.corrFracPerStep * iffePpb
+            if freqPpb > self.maxPpb:
+                freqPpb = self.maxPpb
+            elif freqPpb < -self.maxPpb:
+                freqPpb = -self.maxPpb
+
+        errRange = self.errMaxSec - self.goalSec
+        phaseWeight = 1.0
+        freqWeight = 0.0
+        if errRange > 0.0 and self.lastErrSec is not None:
+            weightErr = errMag
+            if weightErr < self.goalSec:
+                weightErr = self.goalSec
+            elif weightErr > self.errMaxSec:
+                weightErr = self.errMaxSec
+
+            phaseWeight = (weightErr - self.goalSec) / errRange
+            freqWeight = 1.0 - phaseWeight
+
+        combinedPpb = (phaseWeight * phasePpb) + (freqWeight * freqPpb * self.freqPpbGain)
+        if combinedPpb > self.maxPpb:
+            combinedPpb = self.maxPpb
+        elif combinedPpb < -self.maxPpb:
+            combinedPpb = -self.maxPpb
+
+        freqDeltaHz = self.f0Hz * combinedPpb * 1e-9
+        codeDelta = self.codeDeltaGain * freqDeltaHz / self.hzPerLsb
+        newCode = clampInt(self.code + int(round(codeDelta)), self.codeMin, self.codeMax)
+
+        if iffePpb is not None:
+            print(
+                f"PhaseAligner: err {errSec * 1e9:6.1f} ns, "
+                f"combined_ppb {combinedPpb:7.3f} ({phasePpb:5.1f}+{freqPpb*self.freqPpbGain:5.1f}), "
+                f"code_delta {int(round(codeDelta)):6d}, new code {newCode}, "
+                f"iffe {iffePpb:7.3f} ppb"
+            )  # noqa: E501
+        else:
+            print(
+                f"PhaseAligner: err {errSec * 1e9:6.1f} ns, "
+                f"combined_ppb {combinedPpb:7.3f} ({phasePpb:5.1f}+{freqPpb*self.freqPpbGain:5.1f}), "
+                f"code_delta {int(round(codeDelta)):6d}, new code {newCode}"
+            )
+
+        self.code = newCode
+        self.lastErrSec = errSec
 
         if self.inGoal >= self.holdCount:
             self.done = True
+            self.code = self.minIffePpbCode
+            print(f"PhaseAligner: "
+                  f"done, restoring code {self.code} with min iffe {self.minAbsIffePpb:.3f} ppb")
 
         return self.code, self.done
